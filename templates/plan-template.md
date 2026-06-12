@@ -36,16 +36,3 @@
 | AC-1.1 | P1 |
 | AC-1.2 | P1 |
 | AC-2.1 | P2 |
-
-## Steps
-1. Write the file above with the Write tool (create the `templates` directory if needed). The content is plain Markdown — write it verbatim, do NOT wrap it in an extra code fence.
-2. Run from C:\Proyectos\forge-master: `node validate.mjs`
-   Expected: a line `ok:   templates/plan-template.md checked` now appears. Script still exits non-zero overall (skills not built yet) — correct, do not fix the rest.
-3. Commit ONLY the template:
-   git add templates/plan-template.md
-   git commit -m "feat: add plan contract template"
-
-## Report back
-- Status: DONE | BLOCKED
-- The validator line confirming the template checked
-- The commit confirmation line
