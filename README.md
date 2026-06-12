@@ -32,18 +32,21 @@ node validate.mjs              # this repo's structural acceptance test
 |---|---|---|---|
 | `/forge-master:prd-design` | raw idea (interview) | `docs/prd/NNN-name.md` | human gate 1 |
 | `/forge-master:prd-import` | existing PRD/spec (file, paste, Jira/Notion/Linear export) | `docs/prd/NNN-name.md` + Adjustments changelog | human gate 1 |
-| `/forge-master:plan-design` | approved PRD | `docs/context/plan-NNN.md` (the execution contract) | human gate 2 |
+| `/forge-master:spec-design` | approved PRD (optional — for architecturally non-trivial tasks) | `docs/context/spec-NNN.md` (architecture, interfaces, file map, decisions, risks) | human gate 1.5 |
+| `/forge-master:plan-design` | approved PRD (+ spec if present) | `docs/context/plan-NNN.md` (the execution contract) | human gate 2 |
 | `/forge-master:run` | approved plan | autonomous loop until done/blocked → final report | — |
 
-Each command is independently invocable. Starting fresh? `prd-design`. Already have a spec? `prd-import` normalizes it (testable ACs, mandatory Non-Goals, stable IDs) and shows you exactly what it changed. Already have a contract-shaped PRD? Enter at `plan-design`.
+Each command is independently invocable. Starting fresh? `prd-design`. Already have a spec? `prd-import` normalizes it (testable ACs, mandatory Non-Goals, stable IDs) and shows you exactly what it changed. Task with real architecture (new interfaces, data models, multiple components)? Add `spec-design` between PRD and plan — decisions get made once, phase subagents stop re-deriving architecture. Small task? Skip it; the spec is optional by design and always subordinate to the plan.
 
 ## Quick start
 
 ```
 1. /forge-master:prd-design          # interview → PRD with Given/When/Then ACs → you approve
-2. /forge-master:plan-design         # PRD → phases tagged junior/senior + light/heavy,
+2. /forge-master:spec-design         # (optional) architecture, exact interfaces, file map,
+                                     #   resolved decisions, risks → you approve
+3. /forge-master:plan-design         # PRD (+ spec) → phases tagged junior/senior + light/heavy,
                                      #   proven AC coverage → you approve (contract frozen)
-3. /forge-master:run                 # branch forge/NNN-<slug>, executes phase by phase,
+4. /forge-master:run                 # branch forge/NNN-<slug>, executes phase by phase,
                                      #   commits per phase, never asks mid-run
 ```
 
@@ -69,6 +72,7 @@ Interrupted? Compacted? Crashed? Just re-invoke `/forge-master:run` — state li
 | file | role |
 |---|---|
 | `plan-NNN.md` | frozen execution contract |
+| `spec-NNN.md` | technical design reference (optional; phases cite its sections) |
 | `todo.md` | phase status: pending / in_progress / done / blocked |
 | `results.md` | 1-4 line outcome per phase, blockers |
 | `lessons.md` | friction events only — escalations, blockers, corrections |
@@ -95,12 +99,14 @@ A phase that stays red at `senior`+`heavy` after K iterations is marked `[blocke
   plugin.json                  # plugin manifest
   marketplace.json             # single-plugin marketplace (GitHub install)
 skills/
-  prd-design/SKILL.md          # gate 1 — idea → PRD
-  prd-import/SKILL.md          # gate 1 — existing spec → PRD
-  plan-design/SKILL.md         # gate 2 — PRD → execution contract
+  prd-design/SKILL.md          # gate 1   — idea → PRD
+  prd-import/SKILL.md          # gate 1   — existing spec → PRD
+  spec-design/SKILL.md         # gate 1.5 — PRD → technical design (optional)
+  plan-design/SKILL.md         # gate 2   — PRD (+ spec) → execution contract
   forge-run/SKILL.md           # the master loop (command: /forge-master:run)
 templates/
   plan-template.md             # plan contract skeleton
+  spec-template.md             # spec skeleton
 validate.mjs                   # structural acceptance test: node validate.mjs
 docs/forge-master-design.md    # full design rationale
 ```

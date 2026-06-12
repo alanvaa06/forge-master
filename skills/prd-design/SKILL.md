@@ -59,4 +59,4 @@ As a <role>, I want <action>, so that <benefit>.
 ```
 
 ## Step 4 — Human gate 1
-Present the finished PRD. Ask for explicit approval. Do NOT proceed to `plan-design` until the user approves. On approval, tell them the next step is `/forge-master:plan-design`.
+Present the finished PRD. Ask for explicit approval. Do NOT proceed to `plan-design` until the user approves. On approval, tell them the next step is `/forge-master:plan-design` — or `/forge-master:spec-design` first if the task is architecturally non-trivial (new interfaces, data models, multiple components).

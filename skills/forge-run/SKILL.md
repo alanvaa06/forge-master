@@ -39,7 +39,7 @@ verify: run the phase's covered-AC tests AND the full repo test suite
 - **junior:** dispatch a cheap-model subagent (haiku/sonnet), low effort.
 - **senior:** dispatch a top-model subagent, high effort.
 
-Phase subagents receive MINIMAL context: their plan section, their ACs, relevant lessons, and `memory.md`. **Never the run history** — your master context stays lean.
+Phase subagents receive MINIMAL context: their plan section, their ACs, relevant lessons, `memory.md`, and — when `docs/context/spec-NNN.md` exists — only each spec section their phase's `notes:` cite (its Interfaces and File Map rows), never the whole spec. **Never the run history** — your master context stays lean. If implementation reality contradicts a cited spec section, the plan wins; record the divergence in `results.md`.
 
 ### Verification is commands, not judgment
 "Green" is decided by the test runner exit code, never by an agent's opinion — this guards against hallucinated progress. **Double anti-regression check:** the phase's covered-AC tests AND the full repo suite must both pass, so a new phase can never silently break a past phase.

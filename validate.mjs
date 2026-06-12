@@ -64,14 +64,19 @@ const SKILLS = [
     markers: ['## Adjustments', 'Given/When/Then', 'Non-Goals', '[manual-check]', 'gate 1'],
   },
   {
+    path: 'skills/spec-design/SKILL.md',
+    name: 'spec-design',
+    markers: ['## Architecture', 'Interfaces', 'File Map', 'docs/context/spec-', 'OPTIONAL', 'gate 1.5'],
+  },
+  {
     path: 'skills/plan-design/SKILL.md',
     name: 'plan-design',
-    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2'],
+    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md'],
   },
   {
     path: 'skills/forge-run/SKILL.md',
     name: 'run',
-    markers: ['INIT', 'LOOP', 'ESCALATE', 'BLOCK', 'todo.md', 'full repo suite'],
+    markers: ['INIT', 'LOOP', 'ESCALATE', 'BLOCK', 'todo.md', 'full repo suite', 'spec section'],
   },
 ];
 
@@ -101,6 +106,18 @@ if (!existsSync(TPL)) {
     if (!t.includes(m)) fail(`${TPL}: missing "${m}"`);
   }
   ok(`${TPL} checked`);
+}
+
+// 4. Spec template skeleton.
+const STPL = 'templates/spec-template.md';
+if (!existsSync(STPL)) {
+  fail(STPL + ' missing');
+} else {
+  const t = readFileSync(STPL, 'utf8');
+  for (const m of ['## Architecture', '## Interfaces', '## File Map', '## Decisions', '## Risks', 'PRD:']) {
+    if (!t.includes(m)) fail(`${STPL}: missing "${m}"`);
+  }
+  ok(`${STPL} checked`);
 }
 
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
