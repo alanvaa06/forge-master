@@ -66,6 +66,8 @@ Interrupted? Compacted? Crashed? Just re-invoke `/forge-master:run` — state li
 | `light` | implement → run AC tests → commit |
 | `heavy` | phase spec → TDD red-green → independent code review → commit |
 
+The two tags are two execution patterns: light = **inline execution** by the orchestrator itself (cheap, no dispatch overhead); heavy = **subagent-driven development** with a defined dispatch/report contract and freshness policy ([references/dispatch.md](skills/forge-run/references/dispatch.md)).
+
 **Verify.** "Green" is the test runner's exit code, never agent opinion — guards against hallucinated progress. Double anti-regression: phase AC tests + full repo suite, so new phases can't silently break past ones.
 
 **TDD discipline.** Heavy phases follow the Iron Law per AC (`skills/forge-run/references/tdd.md`): test first → MUST fail → minimal implementation → green; code before failing test = violation, AC cycle restarts. Light phases are test-after by declared trade-off (token economy) — escalation to heavy restores full TDD.
@@ -117,6 +119,7 @@ skills/
   forge-run/references/
     tdd.md                     # Iron Law — heavy-phase red-green discipline
     code-review.md             # review contract — checklist, severities, routing
+    dispatch.md                # dispatch protocol — subagent inputs, report contract, freshness
 templates/
   plan-template.md             # plan contract skeleton
   spec-template.md             # spec skeleton
