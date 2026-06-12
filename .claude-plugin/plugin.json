@@ -1,0 +1,9 @@
+{
+  "name": "forge-master",
+  "version": "0.1.0",
+  "description": "Agentic loop-engineering for complex tasks. PRD -> tagged phase plan -> autonomous TDD execution loop with deterministic escalation, command-based verification, and disk-backed state that survives compaction.",
+  "author": {
+    "name": "Alan Vazquez"
+  },
+  "keywords": ["loop-engineering", "agentic", "tdd", "orchestration", "prd", "planning"]
+}
