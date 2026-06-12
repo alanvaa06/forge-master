@@ -34,10 +34,12 @@ verify: run the phase's covered-AC tests AND the full repo test suite
 ```
 
 ### Execute by tags
-- **light:** inline in you or a single subagent — implement -> write & run the covered-AC tests -> commit. No intermediate spec, no separate review.
-- **heavy:** full cycle — write a brief phase spec -> TDD red-green (write the AC test first, watch it fail, implement, reach green) -> dispatch an INDEPENDENT subagent for code review -> commit. Independent heavy phases may fan out via a Workflow script.
+- **light:** inline in you or a single subagent — implement -> write & run the covered-AC tests -> commit. No intermediate spec, no separate review. **Trade-off, explicit:** light = test-after by design, chosen for token economy; it sacrifices the red-proof. Escalation light->heavy restores full TDD.
+- **heavy:** full cycle — write a brief phase spec -> strict red-green TDD per covered AC following `references/tdd.md` (read it and pass it to the phase subagent) -> independent code review per `references/code-review.md` (read it and pass it to the reviewer subagent) -> commit. Independent heavy phases may fan out via a Workflow script.
 - **junior:** dispatch a cheap-model subagent (haiku/sonnet), low effort.
 - **senior:** dispatch a top-model subagent, high effort.
+
+Review findings route deterministically (full contract in `references/code-review.md`): **blockers** re-enter the implementation cycle and increment `iter` — feeding the same K/escalation machinery as red tests; **nits** go to `results.md` and never block.
 
 Phase subagents receive MINIMAL context: their plan section, their ACs, relevant lessons, `memory.md`, and — when `docs/context/spec-NNN.md` exists — only each spec section their phase's `notes:` cite (its Interfaces and File Map rows), never the whole spec. **Never the run history** — your master context stays lean. If implementation reality contradicts a cited spec section, the plan wins; record the divergence in `results.md`.
 
@@ -56,14 +58,36 @@ Trigger when `iter >= K` OR any free signal fires: junior subagent declares stuc
 - `todo.md`: phase -> `[blocked]`; mark every dependent phase `[blocked-upstream]`.
 - Continue with independent branches of the graph. Never request human input mid-run (autonomous mode).
 
+### Re-plan trigger (stale plan ≠ stuck phase)
+A phase subagent may report **"plan assumption broken"** — the plan's premise for this phase is false (interface it builds on doesn't exist as planned, AC contradicts repo reality, dependency phase produced something incompatible). This is NOT "stuck", so escalation would burn tokens on an unwinnable phase:
+- Mark the phase `[plan-stale]` in `todo.md` (skip ESCALATE for it entirely).
+- Record the broken assumption in `results.md` + a lesson.
+- Continue independent branches as with BLOCK.
+- The final report must recommend re-running `plan-design` on the unfinished remainder, citing the broken assumptions.
+
+## Attended mode
+`mode:` comes frozen from Run Config. **`autonomous` (default) never pauses at any of these points.** `attended` pauses at EXACTLY three:
+1. **Before each ESCALATE** — present the trigger and proposed bump; user may approve it, override (different bump), or abort the phase (mark `[blocked]`).
+2. **On BLOCK** — user may unblock with guidance (guidance goes to the phase subagent AND `lessons.md` as a correction), skip the phase, or stop the run cleanly.
+3. **At the Finish stage** — user confirms the `on_complete` action before it executes.
+No other pause points exist; attended mode does not turn the loop conversational.
+
 ## State discipline
 **After EVERY phase, flush full state to disk** (todo, results, lessons, the commit). Compaction or a crash loses at most the in-flight phase. **Resume = re-invoke `/forge-master:run`** — INIT detects the partial `todo.md` and continues. Multi-session for free.
 
 ## END
 1. All phases terminal -> walk the PRD **Definition of Done** checklist. Verify any `[manual-check]` ACs here (they never blocked the loop).
-2. Write the **final report**: phases done / blocked / pending, tokens spent, escalations, and key lessons.
-3. Append a `session-log.md` line and one-line-per-decision architecture notes to `memory.md`.
-4. **Clean-stop guarantees:** if `run_budget` is exhausted, stop cleanly with the report at a phase boundary — NEVER mid-phase without a commit.
+2. Write the **final report**: phases done / blocked / `[plan-stale]` / pending, tokens spent, escalations, key lessons — and, if any phase is `[plan-stale]`, the recommendation to re-run `plan-design` on the remainder.
+3. Run the **Finish stage** (below).
+4. Append a `session-log.md` line and one-line-per-decision architecture notes to `memory.md`.
+5. **Clean-stop guarantees:** if `run_budget` is exhausted, stop cleanly with the report at a phase boundary — NEVER mid-phase without a commit. A budget-stop skips the Finish stage (`keep` behavior) and says so.
+
+## Finish stage — land the branch
+Execute ONLY when the full repo suite is green on the run branch. `on_complete` comes frozen from Run Config; in attended mode confirm the action with the user first, in autonomous mode execute the config without asking:
+- **`pr`** (default) -> push the run branch and open a PR against the base branch; the PR body is generated from the final report (phases, AC IDs satisfied, escalations, lessons).
+- **`merge`** -> merge the run branch into the base branch and delete the run branch. Never merge with blocked/`[plan-stale]` phases outstanding — fall back to `pr` and explain why in the report.
+- **`keep`** -> leave the branch as-is and state in the report exactly where the work lives and how to land it later.
+If the suite is not green (blocked phases remain), do not land anything: `keep` behavior, report states why.
 
 ## Anti-noise learning rule
 Lessons are written ONLY on friction events (escalation, blocker, attended-mode user correction). First-pass-green phases write nothing to `lessons.md` — if everything is a lesson, nothing is.

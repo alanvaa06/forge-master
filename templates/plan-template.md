@@ -3,11 +3,12 @@
 > Execution contract. After human gate 2 approval this file is FROZEN — the loop reads it and asks nothing.
 
 ## Run Config
-- mode: autonomous            # autonomous | attended  (default autonomous; attended allows mid-run user correction)
+- mode: autonomous            # autonomous = never pauses mid-run | attended = pauses only before escalations, on blocks, and to confirm the finish action
 - branch: forge/NNN-<slug>
 - K: 3                        # max consecutive red iterations per phase before escalate-or-block
 - phase_budget: <tokens>      # soft early-escalation signal, not a hard kill
 - run_budget: <tokens>        # global cap; on exhaustion stop cleanly with report
+- on_complete: pr             # pr | merge | keep — pr = push branch + open PR from final report (default) | merge = merge into base + delete run branch | keep = leave branch, report where it lives
 
 ## Phases
 

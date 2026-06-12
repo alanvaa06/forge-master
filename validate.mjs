@@ -54,9 +54,14 @@ if (!existsSync('LICENSE')) fail('LICENSE file missing');
 //    body contains the load-bearing section markers from the design.
 const SKILLS = [
   {
+    path: 'skills/forge/SKILL.md',
+    name: 'forge',
+    markers: ['## Stage', 'prd-design', 'spec-design', 'plan-design', 'existing artifact', 'never skip a gate'],
+  },
+  {
     path: 'skills/prd-design/SKILL.md',
     name: 'prd-design',
-    markers: ['## Interview', 'Given/When/Then', 'Non-Goals', 'Definition of Done', 'gate 1'],
+    markers: ['## Interview', 'Given/When/Then', 'Non-Goals', 'Definition of Done', 'gate 1', '## Divergent'],
   },
   {
     path: 'skills/prd-import/SKILL.md',
@@ -76,9 +81,34 @@ const SKILLS = [
   {
     path: 'skills/forge-run/SKILL.md',
     name: 'run',
-    markers: ['INIT', 'LOOP', 'ESCALATE', 'BLOCK', 'todo.md', 'full repo suite', 'spec section'],
+    markers: [
+      'INIT', 'LOOP', 'ESCALATE', 'BLOCK', 'todo.md', 'full repo suite', 'spec section',
+      '## Attended mode', 'references/tdd.md', 'references/code-review.md', 'test-after',
+      'on_complete', '[plan-stale]', 'plan assumption broken', '## Finish stage',
+    ],
   },
 ];
+
+// 2b. Progressive-disclosure reference files for the run loop.
+const REFS = [
+  {
+    path: 'skills/forge-run/references/tdd.md',
+    markers: ['Iron Law', 'MUST fail', 'violation', 'red-green', 'minimal implementation'],
+  },
+  {
+    path: 'skills/forge-run/references/code-review.md',
+    markers: ['blocker', 'nit', 'iter', 'AC coverage', 'regression risk', 'verified against the code'],
+  },
+];
+for (const r of REFS) {
+  if (!existsSync(r.path)) { fail(r.path + ' missing'); continue; }
+  const text = readFileSync(r.path, 'utf8');
+  let bad = 0;
+  for (const m of r.markers) {
+    if (!text.includes(m)) { fail(`${r.path}: missing required marker "${m}"`); bad++; }
+  }
+  if (!bad) ok(`${r.path} checked`);
+}
 
 const FM = /^---\r?\n([\s\S]*?)\r?\n---/;
 for (const s of SKILLS) {
@@ -102,10 +132,11 @@ if (!existsSync(TPL)) {
   fail(TPL + ' missing');
 } else {
   const t = readFileSync(TPL, 'utf8');
-  for (const m of ['## Run Config', '## Phases', 'covers:', 'depends_on:', 'tier:', 'process:', 'mode:']) {
-    if (!t.includes(m)) fail(`${TPL}: missing "${m}"`);
+  let bad = 0;
+  for (const m of ['## Run Config', '## Phases', 'covers:', 'depends_on:', 'tier:', 'process:', 'mode:', 'attended', 'on_complete:', 'pr | merge | keep']) {
+    if (!t.includes(m)) { fail(`${TPL}: missing "${m}"`); bad++; }
   }
-  ok(`${TPL} checked`);
+  if (!bad) ok(`${TPL} checked`);
 }
 
 // 4. Spec template skeleton.
@@ -114,10 +145,11 @@ if (!existsSync(STPL)) {
   fail(STPL + ' missing');
 } else {
   const t = readFileSync(STPL, 'utf8');
+  let bad = 0;
   for (const m of ['## Architecture', '## Interfaces', '## File Map', '## Decisions', '## Risks', 'PRD:']) {
-    if (!t.includes(m)) fail(`${STPL}: missing "${m}"`);
+    if (!t.includes(m)) { fail(`${STPL}: missing "${m}"`); bad++; }
   }
-  ok(`${STPL} checked`);
+  if (!bad) ok(`${STPL} checked`);
 }
 
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }

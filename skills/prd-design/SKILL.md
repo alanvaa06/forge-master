@@ -15,6 +15,11 @@ Produce `docs/prd/NNN-name.md`: the contract consumed by `plan-design`. The acce
 - `NNN` = next zero-padded integer after the highest existing `docs/prd/NNN-*.md` (start at `001`).
 - Derive `<name>` as a short kebab-case slug from the idea.
 
+## Divergent phase — explore before converging (Step 1.5)
+Assess the input's maturity before any story is drafted:
+- **Raw/vague idea** (a wish, a problem statement, no clear shape — "something to manage my reading backlog"): DIVERGE first. Propose **2-3 distinct approaches** with one-line trade-offs each (scope, effort, risk) and your recommendation. The user picks the direction. Only then start the convergent interview below — direction gets chosen before requirements get frozen.
+- **Specific idea** (clear scope, named feature, known shape): skip the divergent phase entirely and go straight to the interview. Do not manufacture alternatives for an already-decided direction.
+
 ## Step 2 — Interview (one question at a time)
 Brainstorming style: ask ONE question, wait, incorporate, propose, let the user correct. Do not dump a full PRD up front. Explore intent before structure.
 

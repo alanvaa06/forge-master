@@ -30,13 +30,14 @@ node validate.mjs              # this repo's structural acceptance test
 
 | Command | Input | Output | Gate |
 |---|---|---|---|
-| `/forge-master:prd-design` | raw idea (interview) | `docs/prd/NNN-name.md` | human gate 1 |
+| `/forge-master:forge` | anything — chains the full pipeline below | idea → PRD → (spec) → plan → run, every gate intact | all gates |
+| `/forge-master:prd-design` | raw idea (interview; vague ideas get 2-3 approaches to pick from first) | `docs/prd/NNN-name.md` | human gate 1 |
 | `/forge-master:prd-import` | existing PRD/spec (file, paste, Jira/Notion/Linear export) | `docs/prd/NNN-name.md` + Adjustments changelog | human gate 1 |
 | `/forge-master:spec-design` | approved PRD (optional — for architecturally non-trivial tasks) | `docs/context/spec-NNN.md` (architecture, interfaces, file map, decisions, risks) | human gate 1.5 |
 | `/forge-master:plan-design` | approved PRD (+ spec if present) | `docs/context/plan-NNN.md` (the execution contract) | human gate 2 |
 | `/forge-master:run` | approved plan | autonomous loop until done/blocked → final report | — |
 
-Each command is independently invocable. Starting fresh? `prd-design`. Already have a spec? `prd-import` normalizes it (testable ACs, mandatory Non-Goals, stable IDs) and shows you exactly what it changed. Task with real architecture (new interfaces, data models, multiple components)? Add `spec-design` between PRD and plan — decisions get made once, phase subagents stop re-deriving architecture. Small task? Skip it; the spec is optional by design and always subordinate to the plan.
+Each command is independently invocable — or use `forge` to chain them all: it detects existing artifacts (PRD/spec/plan/partial run) and offers to enter at the right stage instead of redoing work. Starting fresh? `prd-design`. Already have a spec? `prd-import` normalizes it (testable ACs, mandatory Non-Goals, stable IDs) and shows you exactly what it changed. Task with real architecture (new interfaces, data models, multiple components)? Add `spec-design` between PRD and plan — decisions get made once, phase subagents stop re-deriving architecture. Small task? Skip it; the spec is optional by design and always subordinate to the plan.
 
 ## Quick start
 
@@ -66,6 +67,14 @@ Interrupted? Compacted? Crashed? Just re-invoke `/forge-master:run` — state li
 | `heavy` | phase spec → TDD red-green → independent code review → commit |
 
 **Verify.** "Green" is the test runner's exit code, never agent opinion — guards against hallucinated progress. Double anti-regression: phase AC tests + full repo suite, so new phases can't silently break past ones.
+
+**TDD discipline.** Heavy phases follow the Iron Law per AC (`skills/forge-run/references/tdd.md`): test first → MUST fail → minimal implementation → green; code before failing test = violation, AC cycle restarts. Light phases are test-after by declared trade-off (token economy) — escalation to heavy restores full TDD.
+
+**Code review contract.** Heavy phases get an independent reviewer with a defined contract (`skills/forge-run/references/code-review.md`): checklist (AC coverage, spec compliance, regression risk, quality), every finding `blocker` or `nit`. Blockers re-enter the implementation cycle and count toward K; nits log to `results.md` and never block. Reviewer feedback is verified against the code, not applied blindly.
+
+**Attended mode.** `mode: attended` in Run Config pauses at exactly three points — before each escalation (approve/override/abort), on block (unblock with guidance/skip/stop), and to confirm the finish action. `autonomous` (default) never pauses mid-run.
+
+**Finish stage.** When the suite is green, the run lands its branch per `on_complete`: `pr` (default — push + PR generated from the final report), `merge` (merge + delete branch), or `keep`. A run with blocked or plan-stale phases never merges. Phase subagents can also report "plan assumption broken" — the phase is marked `[plan-stale]`, skips escalation, and the final report recommends re-running `plan-design` on the remainder instead of executing a stale plan to exhaustion.
 
 **Persist.** Full state flushes to `docs/context/` after every phase:
 
@@ -99,11 +108,15 @@ A phase that stays red at `senior`+`heavy` after K iterations is marked `[blocke
   plugin.json                  # plugin manifest
   marketplace.json             # single-plugin marketplace (GitHub install)
 skills/
-  prd-design/SKILL.md          # gate 1   — idea → PRD
+  forge/SKILL.md               # umbrella — chains the full pipeline, all gates intact
+  prd-design/SKILL.md          # gate 1   — idea → PRD (divergent phase for vague ideas)
   prd-import/SKILL.md          # gate 1   — existing spec → PRD
   spec-design/SKILL.md         # gate 1.5 — PRD → technical design (optional)
   plan-design/SKILL.md         # gate 2   — PRD (+ spec) → execution contract
   forge-run/SKILL.md           # the master loop (command: /forge-master:run)
+  forge-run/references/
+    tdd.md                     # Iron Law — heavy-phase red-green discipline
+    code-review.md             # review contract — checklist, severities, routing
 templates/
   plan-template.md             # plan contract skeleton
   spec-template.md             # spec skeleton
