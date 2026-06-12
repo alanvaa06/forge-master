@@ -1,9 +1,14 @@
 {
   "name": "forge-master",
-  "version": "0.1.0",
+  "displayName": "Forge Master",
+  "version": "0.2.0",
   "description": "Agentic loop-engineering for complex tasks. PRD -> tagged phase plan -> autonomous TDD execution loop with deterministic escalation, command-based verification, and disk-backed state that survives compaction.",
   "author": {
-    "name": "Alan Vazquez"
+    "name": "Alan Vazquez",
+    "email": "alanvaa.06@gmail.com"
   },
+  "homepage": "https://github.com/alanvaa06/forge-master",
+  "repository": "https://github.com/alanvaa06/forge-master",
+  "license": "MIT",
   "keywords": ["loop-engineering", "agentic", "tdd", "orchestration", "prd", "planning"]
 }

@@ -1,41 +1,110 @@
-# forge-master
+# Forge Master
 
-Agentic loop-engineering for complex, long-running tasks. Turn a designed PRD into autonomous, verified, self-correcting execution.
+**Agentic loop-engineering for Claude Code.** Turn a designed PRD into autonomous, verified, self-correcting execution — decompose into phases, route each by complexity, apply TDD discipline where demanded, verify against testable acceptance criteria, and learn across runs until the task is complete or cleanly blocked.
 
-## Flow
+## Install
+
+From GitHub (inside Claude Code):
 
 ```
-/forge-master:prd-design    idea        -> docs/prd/NNN-name.md         (human gate 1)
-/forge-master:prd-import    existing PRD -> docs/prd/NNN-name.md         (human gate 1)
-/forge-master:plan-design   PRD          -> docs/context/plan-NNN.md     (human gate 2 — the execution contract)
-/forge-master:run           plan         -> autonomous loop until done/blocked -> final report
+/plugin marketplace add alanvaa06/forge-master
+/plugin install forge-master@forge-master
 ```
 
-Each command is independently invocable. Starting fresh? Use `prd-design`. Already have a PRD or external spec? Use `prd-import` to normalize it into the contract (it maps your doc onto the format, makes ACs testable, fills gaps, and prints an Adjustments changelog). Already have a contract-shaped PRD? Enter at `plan-design`.
+Or from the CLI:
+
+```bash
+claude plugin marketplace add alanvaa06/forge-master
+claude plugin install forge-master@forge-master
+```
+
+Local development / testing a clone:
+
+```bash
+claude --plugin-dir .          # loads the plugin without installing
+claude plugin validate .       # official manifest validation
+node validate.mjs              # this repo's structural acceptance test
+```
+
+## Commands
+
+| Command | Input | Output | Gate |
+|---|---|---|---|
+| `/forge-master:prd-design` | raw idea (interview) | `docs/prd/NNN-name.md` | human gate 1 |
+| `/forge-master:prd-import` | existing PRD/spec (file, paste, Jira/Notion/Linear export) | `docs/prd/NNN-name.md` + Adjustments changelog | human gate 1 |
+| `/forge-master:plan-design` | approved PRD | `docs/context/plan-NNN.md` (the execution contract) | human gate 2 |
+| `/forge-master:run` | approved plan | autonomous loop until done/blocked → final report | — |
+
+Each command is independently invocable. Starting fresh? `prd-design`. Already have a spec? `prd-import` normalizes it (testable ACs, mandatory Non-Goals, stable IDs) and shows you exactly what it changed. Already have a contract-shaped PRD? Enter at `plan-design`.
+
+## Quick start
+
+```
+1. /forge-master:prd-design          # interview → PRD with Given/When/Then ACs → you approve
+2. /forge-master:plan-design         # PRD → phases tagged junior/senior + light/heavy,
+                                     #   proven AC coverage → you approve (contract frozen)
+3. /forge-master:run                 # branch forge/NNN-<slug>, executes phase by phase,
+                                     #   commits per phase, never asks mid-run
+```
+
+Interrupted? Compacted? Crashed? Just re-invoke `/forge-master:run` — state lives on disk, INIT detects the partial run and resumes. At most the in-flight phase is lost.
 
 ## How it works
 
-- **Decompose:** PRD acceptance criteria (Given/When/Then) become phases, each mapped to the ACs it covers with proven total coverage.
-- **Triage:** phases start optimistic (junior/light) and escalate UP only (junior->senior, light->heavy) by deterministic rules over loop signals — no triage agent, zero extra tokens. Every escalation is logged and improves future triage.
-- **Verify:** "green" is the test runner's exit code, never agent opinion. Double anti-regression — phase tests + full repo suite.
-- **Persist:** full state flushes to `docs/context/` after every phase. Compaction or crash loses at most the in-flight phase. Resume by re-invoking `/forge-master:run`.
-- **Learn:** friction events (escalations, blockers, corrections) write to `lessons.md`, consumed by the next plan. First-pass-green phases write nothing.
+**Decompose.** Every PRD acceptance criterion is Given/When/Then and verifiable by a test or command. `plan-design` maps each AC to exactly one phase (orphan AC = invalid plan) over an acyclic dependency graph.
+
+**Triage.** Phases start optimistic (`junior`/`light`) and escalate UP only — `junior→senior`, then `light→heavy` — by deterministic rules over signals the loop already observes (K consecutive red iterations, stuck subagent, budget exhausted). No triage agent, zero extra tokens. Every escalation is logged to `lessons.md` and improves the next plan's tags.
+
+| tag | meaning |
+|---|---|
+| `junior` | cheap-model subagent, low effort |
+| `senior` | top model, high effort |
+| `light` | implement → run AC tests → commit |
+| `heavy` | phase spec → TDD red-green → independent code review → commit |
+
+**Verify.** "Green" is the test runner's exit code, never agent opinion — guards against hallucinated progress. Double anti-regression: phase AC tests + full repo suite, so new phases can't silently break past ones.
+
+**Persist.** Full state flushes to `docs/context/` after every phase:
+
+| file | role |
+|---|---|
+| `plan-NNN.md` | frozen execution contract |
+| `todo.md` | phase status: pending / in_progress / done / blocked |
+| `results.md` | 1-4 line outcome per phase, blockers |
+| `lessons.md` | friction events only — escalations, blockers, corrections |
+| `memory.md` | one-line architecture decisions |
+| `session-log.md` | one line per session |
+
+**Learn.** Friction events write lessons consumed by the next `plan-design` (better triage over time). First-pass-green phases write nothing — if everything is a lesson, nothing is.
+
+**Isolate.** Each run lives on its own branch (`forge/NNN-<slug>`) with one atomic commit per phase tagged with the AC IDs it satisfies. You keep working on `main`. Full traceability: PRD → phase → test → commit.
+
+## Blocked ≠ dead
+
+A phase that stays red at `senior`+`heavy` after K iterations is marked `[blocked]`, its dependents `[blocked-upstream]`, and the loop continues with every independent branch of the graph. The final report lists done / blocked / pending, token spend, escalations, and lessons — then walks the PRD's Definition of Done, including any `[manual-check]` ACs (which never block the loop).
 
 ## Requirements
 
-- A scaffolded workspace (`docs/context/`, `docs/prd/`). `run` checks for it and runs the `scaffold` skill if missing.
-- A repo test framework (or `run` inserts an implicit setup phase first).
+- A scaffolded workspace (`docs/context/`, `docs/prd/`) — `run` checks and runs the `scaffold` skill if missing.
+- A repo test framework — or `run` inserts an implicit P0 "setup test harness" phase first.
 
 ## Layout
 
 ```
-.claude-plugin/plugin.json
-skills/prd-design/SKILL.md
-skills/prd-import/SKILL.md
-skills/plan-design/SKILL.md
-skills/forge-run/SKILL.md      # name: run
-templates/plan-template.md
+.claude-plugin/
+  plugin.json                  # plugin manifest
+  marketplace.json             # single-plugin marketplace (GitHub install)
+skills/
+  prd-design/SKILL.md          # gate 1 — idea → PRD
+  prd-import/SKILL.md          # gate 1 — existing spec → PRD
+  plan-design/SKILL.md         # gate 2 — PRD → execution contract
+  forge-run/SKILL.md           # the master loop (command: /forge-master:run)
+templates/
+  plan-template.md             # plan contract skeleton
 validate.mjs                   # structural acceptance test: node validate.mjs
+docs/forge-master-design.md    # full design rationale
 ```
 
-See `docs/forge-master-design.md` for the full design rationale.
+## License
+
+MIT — see [LICENSE](LICENSE).

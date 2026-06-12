@@ -17,10 +17,38 @@ if (!existsSync(PJ)) {
     else ok(`${PJ} valid JSON, name=forge-master`);
     if (!j.description) fail(`${PJ}: missing description`);
     if (!j.version) fail(`${PJ}: missing version`);
+    for (const f of ['displayName', 'homepage', 'repository', 'license']) {
+      if (!j[f]) fail(`${PJ}: missing ${f}`);
+    }
   } catch (e) {
     fail(`${PJ} invalid JSON: ${e.message}`);
   }
 }
+
+// 1b. Marketplace manifest — required for GitHub install. ONE plugin entry, source = repo root.
+const MP = '.claude-plugin/marketplace.json';
+if (!existsSync(MP)) {
+  fail(MP + ' missing');
+} else {
+  try {
+    const m = JSON.parse(readFileSync(MP, 'utf8'));
+    if (m.name !== 'forge-master') fail(`${MP}: name is "${m.name}", expected "forge-master"`);
+    if (!m.owner?.name) fail(`${MP}: missing owner.name`);
+    if (!Array.isArray(m.plugins) || m.plugins.length !== 1) fail(`${MP}: must list exactly one plugin (the repo itself)`);
+    else {
+      const p = m.plugins[0];
+      if (p.name !== 'forge-master') fail(`${MP}: plugins[0].name must be "forge-master"`);
+      if (p.source !== './') fail(`${MP}: plugins[0].source must be "./" (repo root)`);
+      if (!p.description) fail(`${MP}: plugins[0] missing description`);
+    }
+    if (!failures) ok(`${MP} valid, single root-plugin entry`);
+  } catch (e) {
+    fail(`${MP} invalid JSON: ${e.message}`);
+  }
+}
+
+// 1c. License file must exist when plugin.json declares a license.
+if (!existsSync('LICENSE')) fail('LICENSE file missing');
 
 // 2. Each skill: file exists, frontmatter has the right name + a description,
 //    body contains the load-bearing section markers from the design.

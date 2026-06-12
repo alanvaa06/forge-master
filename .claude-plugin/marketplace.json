@@ -1,0 +1,15 @@
+{
+  "name": "forge-master",
+  "description": "Forge Master — agentic loop-engineering plugin: PRD design/import, tagged phase planning, autonomous TDD execution loop.",
+  "owner": {
+    "name": "Alan Vazquez",
+    "email": "alanvaa.06@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "forge-master",
+      "source": "./",
+      "description": "Agentic loop-engineering: PRD design/import, tagged phase planning, and an autonomous TDD execution loop with deterministic escalation and disk-backed state."
+    }
+  ]
+}
