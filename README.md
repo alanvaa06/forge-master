@@ -26,6 +26,14 @@ claude plugin validate .       # official manifest validation
 node validate.mjs              # this repo's structural acceptance test
 ```
 
+## When to use forge-master
+
+**Use forge-master when:** the task is long-running or unattended; a PRD with testable acceptance criteria exists or can be written; you want to approve a contract once and let the loop execute to done/blocked; or you need resumability across sessions and compaction.
+
+**Prefer normal interactive work (or the superpowers workflow) when:** the task is short or exploratory; requirements are still being discovered mid-task; or you want to supervise and steer every step.
+
+The two are complementary — install them side by side: superpowers for interactive craftsmanship, forge-master for contract-driven autonomous runs.
+
 ## Commands
 
 | Command | Input | Output | Gate |
@@ -120,6 +128,7 @@ skills/
     tdd.md                     # Iron Law — heavy-phase red-green discipline
     code-review.md             # review contract — checklist, severities, routing
     dispatch.md                # dispatch protocol — subagent inputs, report contract, freshness
+    debugging.md               # systematic debugging — hypothesis discipline per red iteration
 templates/
   plan-template.md             # plan contract skeleton
   spec-template.md             # spec skeleton

@@ -21,7 +21,7 @@ The subagent's final message MUST contain:
 
 - **signal:** exactly one of done | stuck | plan-assumption-broken
   - done — all covered-AC tests written and green.
-  - stuck — cannot reach green after genuine attempts; include what was tried (feeds ESCALATE).
+  - stuck — cannot reach green after genuine attempts; MUST list the root-cause hypotheses tested and the evidence that killed each (per `references/debugging.md`). A stuck report without tested hypotheses is a protocol violation: the orchestrator re-dispatches once with `debugging.md` attached. (Feeds ESCALATE.)
   - plan-assumption-broken — the plan's premise for this phase is false (interface it builds on does not exist as planned, AC contradicts repo reality, dependency phase produced something incompatible); include the broken assumption verbatim (feeds the re-plan trigger, NOT escalation).
 - **files:** every file created or modified.
 - **commands:** the test commands run and their exit codes.
@@ -35,3 +35,6 @@ A report without a signal is treated as stuck.
 - One subagent per phase attempt. NEVER reuse a subagent across phases.
 - After an ESCALATE, the retry gets a FRESH subagent with clean context — the new dispatch includes the escalation lesson just written (what failed and why), not the failed subagent's transcript. A subagent contaminated by its own failures repeats them; a fresh one with the distilled lesson does not.
 - After a review blocker, the SAME implementer context may fix it (it knows the code it just wrote); if the fix iteration triggers ESCALATE, freshness applies again.
+
+---
+Provenance: discipline adapted from the superpowers methodology (obra), frozen into this plugin on 2026-06-12. Self-contained by design — audit against upstream on superpowers major releases.

@@ -85,7 +85,7 @@ const SKILLS = [
       'INIT', 'LOOP', 'ESCALATE', 'BLOCK', 'todo.md', 'full repo suite', 'spec section',
       '## Attended mode', 'references/tdd.md', 'references/code-review.md', 'test-after',
       'on_complete', '[plan-stale]', 'plan assumption broken', '## Finish stage',
-      'dispatch.md', 'inline execution', 'subagent-driven',
+      'dispatch.md', 'inline execution', 'subagent-driven', 'debugging.md',
     ],
   },
 ];
@@ -98,11 +98,15 @@ const REFS = [
   },
   {
     path: 'skills/forge-run/references/code-review.md',
-    markers: ['blocker', 'nit', 'iter', 'AC coverage', 'regression risk', 'verified against the code'],
+    markers: ['blocker', 'nit', 'iter', 'AC coverage', 'regression risk', 'verified against the code', 'incorrect-with-evidence'],
   },
   {
     path: 'skills/forge-run/references/dispatch.md',
-    markers: ['signal', 'done | stuck | plan-assumption-broken', 'Freshness'],
+    markers: ['signal', 'done | stuck | plan-assumption-broken', 'Freshness', 'hypotheses'],
+  },
+  {
+    path: 'skills/forge-run/references/debugging.md',
+    markers: ['falsifiable', 'dead', 'shotgun'],
   },
 ];
 for (const r of REFS) {

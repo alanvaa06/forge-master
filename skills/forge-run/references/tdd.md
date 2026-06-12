@@ -25,3 +25,6 @@ The failing run is the only evidence the test can detect the feature's absence. 
 - Tests assert observable behavior from the AC, not implementation internals — refactors must not break them.
 - One AC may need several assertions, but keep one test (or one tight test group) per AC, named with the AC ID (e.g. `test_AC_2_1_...`) for PRD->phase->test->commit traceability.
 - Light phases do NOT follow this file: light = test-after by design (token economy). Escalation light->heavy restores the Iron Law.
+
+---
+Provenance: discipline adapted from the superpowers methodology (obra), frozen into this plugin on 2026-06-12. Self-contained by design — audit against upstream on superpowers major releases.

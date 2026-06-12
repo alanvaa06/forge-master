@@ -33,6 +33,8 @@ verify: run the phase's covered-AC tests AND the full repo test suite
            if iter >= K and already senior+heavy:          BLOCK
 ```
 
+Every red iteration follows `references/debugging.md` (read it and pass it to whoever owns the fix) — no retry without a root-cause hypothesis; a stuck report must include the hypotheses tested.
+
 ### Execute by tags
 - **light:** inline execution — implement in your own context, or a single subagent if the phase touches many files: implement -> write & run the covered-AC tests -> commit. No intermediate spec, no separate review. **Trade-off, explicit:** light = test-after by design, chosen for token economy; it sacrifices the red-proof. Escalation light->heavy restores full TDD.
 - **heavy:** subagent-driven — full cycle, never inline: write a brief phase spec -> strict red-green TDD per covered AC following `references/tdd.md` (read it and pass it to the phase subagent) -> independent code review per `references/code-review.md` (read it and pass it to the reviewer subagent) -> commit. Independent heavy phases may fan out via a Workflow script. Dispatch and report format per `references/dispatch.md` (read it and follow it for every subagent you spawn).
@@ -50,7 +52,7 @@ Phase subagents receive MINIMAL context: their plan section, their ACs, relevant
 Trigger when `iter >= K` OR any free signal fires: junior subagent declares stuck/no-progress, files touched far exceed the plan estimate, or `phase_budget` exhausted without green.
 - Bump the weakest axis: `junior -> senior` first, then `light -> heavy`. Never de-escalate.
 - Reset `iter` to 0.
-- Append to `lessons.md`: `P<n> escalated (<from>-><to>): <reason>` — friction event, consumed by future `plan-design`.
+- Append to `lessons.md`: `P<n> escalated (<from>-><to>): <reason>; dead hypotheses: <list>` — friction event, consumed by future `plan-design`; the dead-hypothesis list is what the fresh retry inherits (see `references/debugging.md`).
 - Retry the phase.
 
 ### BLOCK (only when already senior+heavy and still red at K)
