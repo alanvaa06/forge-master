@@ -12,7 +12,8 @@ Produce `docs/context/plan-NNN.md` from `docs/prd/NNN-name.md`. After approval t
 
 ## Step 1 — Load inputs
 - Read the target PRD `docs/prd/NNN-name.md` (ask which N if ambiguous).
-- If `docs/context/spec-NNN.md` exists (produced by `spec-design`), read it. Phases then follow its File Map and Interfaces, `notes:` cite the spec sections a phase implements, and the spec's Risks inform tagging — a phase touching a listed risk does not start `junior`/`light`. No spec = proceed normally; the spec is optional and subordinate to this plan.
+- If `docs/context/spec-NNN.md` exists (produced by `spec-design`), read it. Phases then follow its File Map and Interfaces, `notes:` cite the spec sections a phase implements, and the spec's Risks inform tagging — a phase touching a listed risk does not start `junior`/`light`.
+- If NO spec exists and the PRD looks architecturally non-trivial (new interfaces, data models, multiple components that must agree), ASK the user ONCE before decomposing: "No spec found — run `/forge-master:spec-design` first, or plan directly?" Give a one-line recommendation; the user decides. Never assume either way. For a clearly small task, proceed without asking — the spec is optional and subordinate to this plan.
 - Read `docs/context/lessons.md`. Past escalation lessons ("P-type X tagged light escalated — tag heavy when <pattern>") MUST inform your tagging. This is the triage learning loop.
 - Read `templates/plan-template.md` (from this plugin) as the output skeleton.
 

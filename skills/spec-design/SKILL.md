@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 Produce `docs/context/spec-NNN.md` from an approved `docs/prd/NNN-name.md`: the HOW that sits between the PRD's WHAT and the plan's WHEN. Decisions get made once here, so phase subagents never re-derive architecture inconsistently.
 
-**This step is OPTIONAL by design.** The loop's philosophy is optimistic defaults — for a small task (few phases, obvious structure, no new interfaces) tell the user a spec is overhead and recommend going straight to `plan-design`. Write a spec when any of: multiple components must agree on interfaces, a data model or API contract is being introduced/changed, the PRD's Constraints imply architectural tradeoffs, or `lessons.md` shows past runs failing on design drift.
+**This step is OPTIONAL by design.** The loop's philosophy is optimistic defaults — if the task looks small (few phases, obvious structure, no new interfaces), say so and ASK the user whether to skip to `plan-design`; the user decides, never you. A spec is warranted when any of: multiple components must agree on interfaces, a data model or API contract is being introduced/changed, the PRD's Constraints imply architectural tradeoffs, or `lessons.md` shows past runs failing on design drift.
 
 **Subordination rule:** the plan (`plan-NNN.md`) is the ONLY execution contract. The spec is a design reference the plan cites — if they ever conflict, the plan wins and the spec gets corrected.
 
