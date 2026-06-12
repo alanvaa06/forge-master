@@ -9,6 +9,7 @@
 - phase_budget: <tokens>      # soft early-escalation signal, not a hard kill
 - run_budget: <tokens>        # global cap; on exhaustion stop cleanly with report
 - on_complete: pr             # pr | merge | keep — pr = push branch + open PR from final report (default) | merge = merge into base + delete run branch | keep = leave branch, report where it lives
+- max_parallel: 1             # 1 = fully sequential (default); >1 = max concurrent phases per batch, requires ## Parallel Groups below
 
 ## Phases
 
@@ -27,6 +28,11 @@
 - process: heavy
 - success: covered ACs green + full repo test suite still passes
 - notes: <...>
+
+## Parallel Groups
+> Optional. Only phases declared here run concurrently (worktree per phase, sequential merge-back). Members must be mutually independent (no depends_on path) AND file-disjoint. Omit the section for fully sequential runs.
+
+- group-1: P2, P3              # example — delete or replace
 
 ## Coverage Proof
 > Filled by plan-design before presenting. Lists every PRD AC and the single phase that covers it.

@@ -20,6 +20,8 @@ You are the orchestrator. You ORCHESTRATE and VERIFY. You implement ONLY light p
 ## LOOP — while executable phases remain
 An "executable" phase is `[pending]` with all `depends_on` satisfied (those phases `done`).
 
+**Parallel batches:** when the plan declares Parallel Groups and Run Config `max_parallel` > 1, executable phases belonging to the same group launch as a concurrent batch per `references/parallel.md` (read it first). Everything else about each phase — tags, TDD, review, K, escalation, debugging — applies unchanged; only WHERE it runs (a worktree) and WHEN it integrates (sequential merge with full-suite check after each) differ.
+
 ```
 phase = next pending phase whose depends_on are all done
 todo.md: phase -> in_progress        (FLUSH)
@@ -37,7 +39,7 @@ Every red iteration follows `references/debugging.md` (read it and pass it to wh
 
 ### Execute by tags
 - **light:** inline execution — implement in your own context, or a single subagent if the phase touches many files: implement -> write & run the covered-AC tests -> commit. No intermediate spec, no separate review. **Trade-off, explicit:** light = test-after by design, chosen for token economy; it sacrifices the red-proof. Escalation light->heavy restores full TDD.
-- **heavy:** subagent-driven — full cycle, never inline: write a brief phase spec -> strict red-green TDD per covered AC following `references/tdd.md` (read it and pass it to the phase subagent) -> independent code review per `references/code-review.md` (read it and pass it to the reviewer subagent) -> commit. Independent heavy phases may fan out via a Workflow script. Dispatch and report format per `references/dispatch.md` (read it and follow it for every subagent you spawn).
+- **heavy:** subagent-driven — full cycle, never inline: write a brief phase spec -> strict red-green TDD per covered AC following `references/tdd.md` (read it and pass it to the phase subagent) -> independent code review per `references/code-review.md` (read it and pass it to the reviewer subagent) -> commit. Independent phases in a plan-declared parallel group fan out per `references/parallel.md`. Dispatch and report format per `references/dispatch.md` (read it and follow it for every subagent you spawn).
 - **junior:** dispatch a cheap-model subagent (haiku/sonnet), low effort.
 - **senior:** dispatch a top-model subagent, high effort.
 
@@ -82,7 +84,7 @@ No other pause points exist; attended mode does not turn the loop conversational
 2. Write the **final report**: phases done / blocked / `[plan-stale]` / pending, tokens spent, escalations, key lessons — and, if any phase is `[plan-stale]`, the recommendation to re-run `plan-design` on the remainder.
 3. Run the **Finish stage** (below).
 4. Append a `session-log.md` line and one-line-per-decision architecture notes to `memory.md`.
-5. **Clean-stop guarantees:** if `run_budget` is exhausted, stop cleanly with the report at a phase boundary — NEVER mid-phase without a commit. A budget-stop skips the Finish stage (`keep` behavior) and says so.
+5. **Clean-stop guarantees:** if `run_budget` is exhausted, stop cleanly with the report at a phase boundary — NEVER mid-phase without a commit. A budget-stop skips the Finish stage (`keep` behavior) and says so. List git worktrees and remove any forge-created leftovers (`git worktree list` / `git worktree remove`) — a finished or stopped run leaves no dangling worktrees or phase branches.
 
 ## Finish stage — land the branch
 Execute ONLY when the full repo suite is green on the run branch. `on_complete` comes frozen from Run Config; in attended mode confirm the action with the user first, in autonomous mode execute the config without asking:

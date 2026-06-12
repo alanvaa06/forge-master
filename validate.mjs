@@ -76,7 +76,7 @@ const SKILLS = [
   {
     path: 'skills/plan-design/SKILL.md',
     name: 'plan-design',
-    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md'],
+    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md', 'Parallel Groups'],
   },
   {
     path: 'skills/forge-run/SKILL.md',
@@ -85,7 +85,7 @@ const SKILLS = [
       'INIT', 'LOOP', 'ESCALATE', 'BLOCK', 'todo.md', 'full repo suite', 'spec section',
       '## Attended mode', 'references/tdd.md', 'references/code-review.md', 'test-after',
       'on_complete', '[plan-stale]', 'plan assumption broken', '## Finish stage',
-      'dispatch.md', 'inline execution', 'subagent-driven', 'debugging.md',
+      'dispatch.md', 'inline execution', 'subagent-driven', 'debugging.md', 'parallel.md',
     ],
   },
 ];
@@ -107,6 +107,10 @@ const REFS = [
   {
     path: 'skills/forge-run/references/debugging.md',
     markers: ['falsifiable', 'dead', 'shotgun'],
+  },
+  {
+    path: 'skills/forge-run/references/parallel.md',
+    markers: ['worktree', 'file-disjoint', 'integration failure', 'max_parallel'],
   },
 ];
 for (const r of REFS) {
@@ -142,7 +146,7 @@ if (!existsSync(TPL)) {
 } else {
   const t = readFileSync(TPL, 'utf8');
   let bad = 0;
-  for (const m of ['## Run Config', '## Phases', 'covers:', 'depends_on:', 'tier:', 'process:', 'mode:', 'attended', 'on_complete:', 'pr | merge | keep']) {
+  for (const m of ['## Run Config', '## Phases', 'covers:', 'depends_on:', 'tier:', 'process:', 'mode:', 'attended', 'on_complete:', 'pr | merge | keep', 'max_parallel:']) {
     if (!t.includes(m)) { fail(`${TPL}: missing "${m}"`); bad++; }
   }
   if (!bad) ok(`${TPL} checked`);

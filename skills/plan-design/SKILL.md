@@ -33,11 +33,14 @@ Build the coverage table: every PRD AC -> the single phase that covers it.
 - An AC covered by two phases is also invalid — assign it to one.
 - Verify the `depends_on` graph is acyclic.
 
+## Step 3.5 — Parallel groups (only if the user wants parallelism)
+Identify sets of phases that are mutually independent (no `depends_on` path between any pair) AND file-disjoint (probable files in notes / cited File Map rows do not overlap). Declare them in the plan as `## Parallel Groups` (e.g. `group-1: P2, P3, P4`). A phase in no group runs sequentially. When in doubt about file overlap, leave the phase out of any group — sequential is the safe default.
+
 ## Step 4 — Run config
-Fill `Run Config`: mode (default `autonomous`), `branch: forge/NNN-<slug>`, `K: 3`, and `phase_budget` / `run_budget` heuristics sized to the PRD.
+Fill `Run Config`: mode (default `autonomous`), `branch: forge/NNN-<slug>`, `K: 3`, `phase_budget` / `run_budget` heuristics sized to the PRD, and `max_parallel: 1` (default — fully sequential) or N (max concurrent phases per batch). Only set > 1 when Parallel Groups exist.
 
 ## Step 5 — Write the file
 Write `docs/context/plan-NNN.md` by filling `templates/plan-template.md` completely — no `<...>` placeholders left.
 
 ## Step 6 — Human gate 2
-Present: the phase list, each phase's tier/process tags WITH the reasoning (and any lesson that drove a non-default tag), and the total-coverage table. Ask for explicit approval. On approval the plan is FROZEN. Tell the user the next step is `/forge-master:run`.
+Present: the phase list, each phase's tier/process tags WITH the reasoning (and any lesson that drove a non-default tag), the total-coverage table, and — when declared — the Parallel Groups with their file-disjointness reasoning (the human approves parallelism as part of the frozen contract). Ask for explicit approval. On approval the plan is FROZEN. Tell the user the next step is `/forge-master:run`.
