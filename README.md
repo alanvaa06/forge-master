@@ -5,12 +5,13 @@ Agentic loop-engineering for complex, long-running tasks. Turn a designed PRD in
 ## Flow
 
 ```
-/forge-master:prd-design    idea  -> docs/prd/NNN-name.md         (human gate 1)
-/forge-master:plan-design   PRD   -> docs/context/plan-NNN.md     (human gate 2 — the execution contract)
-/forge-master:run           plan  -> autonomous loop until done/blocked -> final report
+/forge-master:prd-design    idea        -> docs/prd/NNN-name.md         (human gate 1)
+/forge-master:prd-import    existing PRD -> docs/prd/NNN-name.md         (human gate 1)
+/forge-master:plan-design   PRD          -> docs/context/plan-NNN.md     (human gate 2 — the execution contract)
+/forge-master:run           plan         -> autonomous loop until done/blocked -> final report
 ```
 
-Each command is independently invocable — already have a PRD? Enter at `plan-design`.
+Each command is independently invocable. Starting fresh? Use `prd-design`. Already have a PRD or external spec? Use `prd-import` to normalize it into the contract (it maps your doc onto the format, makes ACs testable, fills gaps, and prints an Adjustments changelog). Already have a contract-shaped PRD? Enter at `plan-design`.
 
 ## How it works
 
@@ -30,6 +31,7 @@ Each command is independently invocable — already have a PRD? Enter at `plan-d
 ```
 .claude-plugin/plugin.json
 skills/prd-design/SKILL.md
+skills/prd-import/SKILL.md
 skills/plan-design/SKILL.md
 skills/forge-run/SKILL.md      # name: run
 templates/plan-template.md

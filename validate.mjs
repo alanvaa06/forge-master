@@ -31,6 +31,11 @@ const SKILLS = [
     markers: ['## Interview', 'Given/When/Then', 'Non-Goals', 'Definition of Done', 'gate 1'],
   },
   {
+    path: 'skills/prd-import/SKILL.md',
+    name: 'prd-import',
+    markers: ['## Adjustments', 'Given/When/Then', 'Non-Goals', '[manual-check]', 'gate 1'],
+  },
+  {
     path: 'skills/plan-design/SKILL.md',
     name: 'plan-design',
     markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2'],
