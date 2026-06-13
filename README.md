@@ -43,6 +43,7 @@ The two are complementary — install them side by side: superpowers for interac
 | `/forge-master:prd-import` | existing PRD/spec (file, paste, Jira/Notion/Linear export) | `docs/forge/prd/NNN-name.md` + Adjustments changelog | human gate 1 |
 | `/forge-master:spec-design` | approved PRD (optional — for architecturally non-trivial tasks) | `docs/forge/specs/spec-NNN.md` (architecture, interfaces, file map, decisions, risks) | human gate 1.5 |
 | `/forge-master:plan-design` | approved PRD (+ spec if present) | `docs/forge/plans/plan-NNN.md` (the execution contract) | human gate 2 |
+| `/forge-master:budget` | a decomposed (not-yet-frozen) plan (optional) | per-phase token matrix + filled `phase_budget` / `run_budget` | informs gate 2 |
 | `/forge-master:run` | approved plan | autonomous loop until done/blocked → final report | — |
 
 Each command is independently invocable — or use `forge` to chain them all: it detects existing artifacts (PRD/spec/plan/partial run) and offers to enter at the right stage instead of redoing work. Starting fresh? `prd-design`. Already have a spec? `prd-import` normalizes it (testable ACs, mandatory Non-Goals, stable IDs) and shows you exactly what it changed. Task with real architecture (new interfaces, data models, multiple components)? Add `spec-design` between PRD and plan — decisions get made once, phase subagents stop re-deriving architecture. Small task? Skip it; the spec is optional by design and always subordinate to the plan.
@@ -77,6 +78,8 @@ Interrupted? Compacted? Crashed? Just re-invoke `/forge-master:run` — state li
 The two tags are two execution patterns: light = **inline execution** by the orchestrator itself (cheap, no dispatch overhead); heavy = **subagent-driven development** with a defined dispatch/report contract and freshness policy ([references/dispatch.md](skills/forge-run/references/dispatch.md)).
 
 **Parallel execution.** Plans can declare Parallel Groups (mutually independent AND file-disjoint phases, approved at gate 2) and set `max_parallel` > 1 in Run Config. Each batched phase runs in its own git worktree on a child branch of the run branch; integration is sequential — merge by phase order with the full repo suite after every merge. A merge conflict or red suite is an integration failure that feeds the same K/escalation machinery, and the phase re-runs sequentially on the updated run branch. Default stays `max_parallel: 1` — parallelism is opt-in and never improvised at runtime ([references/parallel.md](skills/forge-run/references/parallel.md)).
+
+**Budget (optional).** Before a large plan is frozen, `budget` estimates per-phase token cost from the plan's own signals (tier, process, AC count, parallel groups), prints a matrix, and fills `phase_budget` / `run_budget` with principled numbers instead of heuristics — so the loop's existing budget machinery (early-escalation signal + clean-stop cap) runs on real estimates. It also flags phases whose cost contradicts their tag (a `junior`/`light` phase estimating high is probably mis-tagged — cheaper to fix at plan time than via runtime escalation). Estimates are ranges, never gates; the human still approves at gate 2.
 
 **Verify.** "Green" is the test runner's exit code, never agent opinion — guards against hallucinated progress. Double anti-regression: phase AC tests + full repo suite, so new phases can't silently break past ones.
 
@@ -126,6 +129,7 @@ skills/
   prd-import/SKILL.md          # gate 1   — existing spec → PRD
   spec-design/SKILL.md         # gate 1.5 — PRD → technical design (optional)
   plan-design/SKILL.md         # gate 2   — PRD (+ spec) → execution contract
+  budget/SKILL.md              # optional — token matrix, fills phase_budget/run_budget before gate 2
   forge-run/SKILL.md           # the master loop (command: /forge-master:run)
   forge-run/references/
     tdd.md                     # Iron Law — heavy-phase red-green discipline

@@ -39,6 +39,8 @@ Identify sets of phases that are mutually independent (no `depends_on` path betw
 ## Step 4 — Run config
 Fill `Run Config`: mode (default `autonomous`), `branch: forge/NNN-<slug>`, `K: 3`, `phase_budget` / `run_budget` heuristics sized to the PRD, and `max_parallel: 1` (default — fully sequential) or N (max concurrent phases per batch). Only set > 1 when Parallel Groups exist.
 
+For a large or heavy plan, optionally hand off to the `budget` skill (`/forge-master:budget`) BEFORE gate 2 — it produces a per-phase token matrix and fills `phase_budget` / `run_budget` with principled numbers instead of heuristics, and flags any phase whose cost contradicts its tag. Optional; skip it for small plans.
+
 ## Step 5 — Write the file
 Write `docs/forge/plans/plan-NNN.md` (create `docs/forge/plans/` if it does not exist) by filling `templates/plan-template.md` completely — no `<...>` placeholders left.
 

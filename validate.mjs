@@ -76,7 +76,12 @@ const SKILLS = [
   {
     path: 'skills/plan-design/SKILL.md',
     name: 'plan-design',
-    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md', 'Parallel Groups'],
+    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md', 'Parallel Groups', 'budget'],
+  },
+  {
+    path: 'skills/budget/SKILL.md',
+    name: 'budget',
+    markers: ['## Budget Matrix', 'phase_budget', 'run_budget', 'order-of-magnitude', 'OPTIONAL', 'gate 2', 'never a gate'],
   },
   {
     path: 'skills/forge-run/SKILL.md',

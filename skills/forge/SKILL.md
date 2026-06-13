@@ -23,7 +23,7 @@ Invoke the `prd-design` skill (or `prd-import` for an existing document) and fol
 After PRD approval, ask the spec-or-plan question exactly as `prd-design` specifies (recommend, user decides). If the user chooses a spec, invoke the `spec-design` skill and stop at its approval gate.
 
 ## Stage 2 — Plan (human gate 2)
-Invoke the `plan-design` skill and follow it fully — decomposition, tagging, total coverage proof. Stop at its approval gate. The approved plan is the frozen execution contract.
+Invoke the `plan-design` skill and follow it fully — decomposition, tagging, total coverage proof. For a large or heavy plan, optionally hand off to the `budget` skill before approval to estimate token cost and fill `phase_budget` / `run_budget`. Stop at the approval gate. The approved plan (budgets included) is the frozen execution contract.
 
 ## Stage 3 — Run
 Invoke the `run` skill. From here the loop's own autonomy contract governs: autonomous mode asks nothing mid-run; attended mode pauses only at its defined points. The pipeline ends with the run's final report.
