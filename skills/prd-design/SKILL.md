@@ -23,6 +23,20 @@ This applies especially to next-step handoffs between skills/commands (e.g. PRD 
 
 **Close every question — assume nothing.** The interview covers a fixed set of topics (the six in Step 2). Treat them as an open-questions ledger: it is done only when the user has answered *every* one. A default you proposed is not an answer until the user confirms it — nothing enters the PRD on your authority alone. Users will interrupt, jump ahead, or try to short-circuit ("looks good, just write it"); when they do, absorb the new information, then name what is still open and return to it. A silently skipped question is a hole in the contract that resurfaces downstream as drift or a missing acceptance criterion — closing all of them is exactly what this gate exists for. Resuming sounds like: *"Got it — that covers US-2's criteria. Still open: Non-Goals and Constraints. Next: <question>."*
 
+## When the user gets stuck, switch to plain-language mode
+The interview only works if the user actually understands what they are deciding — an approval given in confusion is a rubber stamp that turns into drift downstream. So watch for confusion and treat clearing it as the task, not a detour. Stay lean by default (don't over-explain to a user who is moving fast), but the moment any of these signals fires, change gear:
+
+**Triggers (any one):** the user asks you to simplify or says "I don't get it" · answers your question with a question · still can't answer after you rephrase once · says "shape this" / "help me think."
+
+**Changing gear is a real mode switch, not the same words said louder:**
+- Drop every piece of jargon and every ID. No `AC-4.3`, no "foreign key", no "read-gate" — name things in words a non-engineer would use.
+- Anchor in ONE concrete example from the user's own case, not an abstraction (*"Apple's 10-K is the exact same file for everyone; Crocs isn't on your list, so saving it bounced."*).
+- Reframe the decision as a trade-off the user can weigh without expertise: who pays, what it costs, what breaks on each side. Two or three options, one line each.
+- If an insight collapses the complexity, lead with it (*"there are two **kinds** of content here, not one — public filings are identical for every user; private uploads differ per user"*). Finding that reframe is the product-manager move.
+- THEN re-ask the original question in the new framing. You simplified the question — you did not answer it. The user still decides; confusion is never license to pick for them (this is the "assume nothing" habit under pressure).
+
+In short: behave like a product manager — translate the technical or schema reality into product terms, surface the trade-off, and hand the decision back clearer than you found it.
+
 ## Step 1 — Locate / number the PRD
 - Ensure `docs/forge/prd/` exists — forge owns the `docs/forge/` tree, so create it if missing. Separately, the `docs/context/` memory system (lessons, memory, todo, ...) is provided by the `scaffold` skill; if `docs/context/` is absent, tell the user to run `scaffold` first (or run it for them), then continue.
 - `NNN` = next zero-padded integer after the highest existing `docs/forge/prd/NNN-*.md` (start at `001`).

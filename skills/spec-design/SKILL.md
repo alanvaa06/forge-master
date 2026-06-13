@@ -41,6 +41,8 @@ Coverage check before presenting: every PRD `US-n` is served by at least one com
 ## Step 3 — Resolve open questions
 If anything genuinely cannot be decided from the PRD, repo, and memory — collect ALL open questions and ask the user in ONE batched message (numbered, with your recommended default per question). Never leave a `TBD` in the written spec.
 
+**If the user gets stuck on any question, switch to plain-language mode before re-asking.** This is the most jargon-dense gate (interfaces, schemas, DDL), so confusion is likely. Signals: the user asks you to simplify, answers with a question, or can't answer after one rephrase. When that happens: drop the schema/interface terms and IDs, anchor the choice in ONE concrete example from their own case, frame it as a trade-off they can weigh without expertise (cost, what breaks each way), and lead with any insight that collapses the complexity — then re-ask. You simplify the question; the user still decides. A spec approved in confusion is a rubber stamp that drifts later; translating schema reality into a decision a human can actually make is the product-manager job here.
+
 ## Step 4 — Write the file
 Write `docs/forge/specs/spec-NNN.md` (create `docs/forge/specs/` if it does not exist) by filling `templates/spec-template.md` completely — no `<...>` placeholders left.
 

@@ -39,6 +39,8 @@ Walk the mapped draft against the contract's hard rules. Fix every gap you can b
 
 Prefer deriving from the source over interrogating the user. Only ask when the answer is not recoverable from the document.
 
+**If the user gets confused by a gap question, switch to plain-language mode before re-asking.** Signals: they ask you to simplify, answer with a question, or can't answer after one rephrase. When that happens: drop the jargon and IDs, ground the choice in ONE concrete example from their own product, frame it as a weighable trade-off (cost, what breaks each way), and lead with any insight that collapses the complexity — then re-ask. You simplify the question; you never answer it for them. A normalized PRD the user approved without understanding is a rubber stamp that drifts downstream — translating the requirement into a decision they can actually make is the product-manager job.
+
 ## Step 5 — Write the file
 Write `docs/forge/prd/NNN-name.md` using exactly this structure:
 
