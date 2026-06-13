@@ -42,7 +42,7 @@ Build the coverage table: every PRD AC -> the single phase that covers it.
 Identify sets of phases that are mutually independent (no `depends_on` path between any pair) AND file-disjoint (probable files in notes / cited File Map rows do not overlap). Declare them in the plan as `## Parallel Groups` (e.g. `group-1: P2, P3, P4`). A phase in no group runs sequentially. When in doubt about file overlap, leave the phase out of any group — sequential is the safe default.
 
 ## Step 4 — Run config
-Fill `Run Config`: mode (default `autonomous`), `branch: forge/NNN-<slug>`, `K: 3`, `phase_budget` / `run_budget` heuristics sized to the PRD, `on_complete` (default `pr` — push branch + open PR | `merge` | `keep`), and `max_parallel: 1` (default — fully sequential) or N (max concurrent phases per batch). Only set > 1 when Parallel Groups exist.
+Fill `Run Config`: mode (default `autonomous`), `branch: forge/NNN-<slug>`, `isolation: worktree` (default — the run gets its own sibling worktree so the user's primary dir, editor, and any concurrent session stay untouched; only set `in-place` when the user confirms this is the sole session on the repo), `K: 3`, `phase_budget` / `run_budget` heuristics sized to the PRD, `on_complete` (default `pr` — push branch + open PR | `merge` | `keep`), and `max_parallel: 1` (default — fully sequential) or N (max concurrent phases per batch). Only set > 1 when Parallel Groups exist.
 
 For a large or heavy plan, optionally hand off to the `budget` skill (`/forge-master:budget`) BEFORE gate 2 — it produces a per-phase token matrix and fills `phase_budget` / `run_budget` with principled numbers instead of heuristics, and flags any phase whose cost contradicts its tag. Optional; skip it for small plans.
 
@@ -59,6 +59,7 @@ Render the frozen-candidate config with a health mark on each diagnosable line (
 ## Run Config — review before freeze
 - **mode:** <autonomous|attended> · <one-line meaning>
 - **branch:** forge/NNN-<slug>
+- **isolation:** <worktree|in-place> · <primary dir untouched | shares the working dir>   <mark>
 - **K:** <n> · max self-heal red iterations/phase before escalate
 - **max_parallel:** <n> · <sequential | concurrent per group>      <mark>
 - **phase_budget:** ~<n> · soft early-escalation signal            <mark>
@@ -68,6 +69,7 @@ Render the frozen-candidate config with a health mark on each diagnosable line (
 ```
 
 Mark logic:
+- **isolation** — `✓` if `worktree` · `⚠ shared-dir` if `in-place` (the run will check out its branch in the working dir, colliding with any concurrent session or open editor).
 - **run_budget** — `✓` if ≥ matrix TOTAL-high × headroom · `⚠ below est` if under TOTAL-high · `(heuristic — no matrix)` if `budget` never ran.
 - **phase_budget** — `✓` if ≥ a typical phase's estimated high · `⚠ below est` if under · `(heuristic — no matrix)` if no matrix.
 - **K** — `✓` at 2–5 · `⚠ low` if <2 · `⚠ high` if >6.
@@ -84,6 +86,7 @@ Ask as a lettered list:
 
 On **b)**, apply the matching pushback, then edit the plan's Run Config and re-present Block A once (back to a/b). Pushback is **advisory — warn once, then honor** for every knob EXCEPT the one hard block:
 
+- **isolation set to `in-place`:** "⚠ in-place checks out `forge/NNN-<slug>` in the working dir — any other session or your open editor gets yanked onto the run branch (the collision worktree mode exists to prevent). Safe only if this is the sole session on the repo. Keep in-place?"
 - **run_budget below matrix TOTAL-high:** "⚠ run_budget ~X is below the matrix TOTAL-high (~Y). The loop stops cleanly mid-run with a report at the cap — you may not reach the finish action. Trade: ~Δ fewer tokens for a possible incomplete run. Keep ~X?"
 - **phase_budget below a typical phase's high:** "⚠ phase_budget ~X is under several phases' estimated high — those phases early-escalate to you before finishing (more interruptions, not a kill). Intended?"
 - **K < 2:** "⚠ K=X: self-heal gives up after X red iteration(s) then escalates. Lower K = faster failures, more human pings. Default 3 balances. Keep X?"

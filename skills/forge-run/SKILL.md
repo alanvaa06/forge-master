@@ -11,11 +11,16 @@ disable-model-invocation: true
 You are the orchestrator. You ORCHESTRATE and VERIFY. You implement ONLY light phases inline (inline execution — cheap, no dispatch overhead); heavy implementation ALWAYS lives in disposable phase subagents (subagent-driven development). Live state lives on disk, not in your context.
 
 ## INIT
-1. Read `docs/forge/plans/plan-NNN.md` (ask which N if more than one and ambiguous). Read `docs/context/lessons.md` and `docs/context/todo.md`.
-2. Verify the `docs/context/` scaffold exists. If missing, run the user's `scaffold` skill first, then continue.
-3. **Resume detection:** if `todo.md` already holds this plan's phase entries with some marked `done`/`blocked`, you are RESUMING — pick up at the first non-terminal phase. Otherwise seed `todo.md` with one `[pending]` entry per phase.
-4. **Test harness check:** detect the repo's test framework. If none exists, insert an implicit phase **P0: setup test harness** and run it first — nothing can be verified without a runner.
-5. Create/checkout the branch from Run Config (`forge/NNN-<slug>`). The user keeps working on `main`; this branch isolates the run.
+1. **Read the contract.** Read `docs/forge/plans/plan-NNN.md` (ask which N if more than one and ambiguous) for the phases and Run Config — you need `branch` and `isolation` before touching disk. (On a worktree resume the plan may live only on the run branch; if it isn't in the current dir, the worktree list in step 2 leads you to it.)
+2. **Establish the run root (Run Config `isolation`).** This decides WHERE every later step reads and writes — do it before the scaffold, resume, and harness checks.
+   - **`worktree` (default):** the run gets its own git worktree, so the primary dir — the user's editor and any other session — keeps its branch untouched. In-place checkout only *looks* isolated; a worktree is what makes "the user keeps working on their branch" actually true.
+     - *Resume first:* run `git worktree list`. If `../<repo-dirname>-forge-NNN` (branch `forge/NNN-<slug>`) already exists, that IS the run root — cd in, do not recreate.
+     - *Fresh run:* `git worktree add ../<repo-dirname>-forge-NNN -b forge/NNN-<slug>` from the current HEAD, then cd in. Quote paths on Windows; the sibling layout keeps the worktree outside the repo root and any watcher scope. If the approved plan / spec / PRD or the `docs/context/` scaffold are not yet committed on this branch, write the content you read in step 1 into the worktree and commit it as the run's seed commit — the contract must live on the run branch.
+   - **`in-place`:** `git checkout -b forge/NNN-<slug>` in the current dir. This moves the shared working dir onto the run branch, so any concurrent session or open editor collides. Use ONLY when this is the sole session on the repo; if `git worktree list` or recent commits on another branch suggest other live work, warn the user and switch to `worktree`.
+   - From here, **the run root** = wherever you just landed. Every read, write, commit, and phase worktree below happens there.
+3. **Scaffold check.** In the run root, verify `docs/context/` exists. If missing, run the user's `scaffold` skill first, then continue.
+4. **Resume detection.** Read `docs/context/todo.md` and `docs/context/lessons.md` in the run root. If `todo.md` already holds this plan's phase entries with some marked `done`/`blocked`, you are RESUMING — pick up at the first non-terminal phase. Otherwise seed `todo.md` with one `[pending]` entry per phase.
+5. **Test harness check:** detect the repo's test framework. If none exists, insert an implicit phase **P0: setup test harness** and run it first — nothing can be verified without a runner.
 
 ## LOOP — while executable phases remain
 An "executable" phase is `[pending]` with all `depends_on` satisfied (those phases `done`).
@@ -95,7 +100,7 @@ No other pause points exist; attended mode does not turn the loop conversational
 2. Write the **final report**: phases done / blocked / `[plan-stale]` / pending, tokens spent, escalations, key lessons — and, if any phase is `[plan-stale]`, the recommendation to re-run `plan-design` on the remainder.
 3. Run the **Finish stage** (below).
 4. Append a `session-log.md` line and one-line-per-decision architecture notes to `memory.md`.
-5. **Clean-stop guarantees:** if `run_budget` is exhausted, stop cleanly with the report at a phase boundary — NEVER mid-phase without a commit. A budget-stop skips the Finish stage (`keep` behavior) and says so. List git worktrees and remove any forge-created leftovers (`git worktree list` / `git worktree remove`) — a finished or stopped run leaves no dangling worktrees or phase branches.
+5. **Clean-stop guarantees:** if `run_budget` is exhausted, stop cleanly with the report at a phase boundary — NEVER mid-phase without a commit. A budget-stop skips the Finish stage (`keep` behavior) and says so. List git worktrees and remove any forge-created leftovers (`git worktree list` / `git worktree remove`) — a finished or stopped run leaves no dangling worktrees or phase branches. Under `isolation: worktree` this includes the run worktree itself once the Finish action has landed the branch (cd to the primary dir first, since you cannot remove the worktree you stand in); for `keep`, leave the run worktree and report its path.
 
 ## Finish stage — land the branch
 Execute ONLY when the full repo suite is green on the run branch. `on_complete` comes frozen from Run Config; in attended mode confirm the action with the user first, in autonomous mode execute the config without asking:
@@ -103,6 +108,8 @@ Execute ONLY when the full repo suite is green on the run branch. `on_complete` 
 - **`merge`** -> merge the run branch into the base branch and delete the run branch. Never merge with blocked/`[plan-stale]` phases outstanding — fall back to `pr` and explain why in the report.
 - **`keep`** -> leave the branch as-is and state in the report exactly where the work lives and how to land it later.
 If the suite is not green (blocked phases remain), do not land anything: `keep` behavior, report states why.
+
+**Worktree isolation (`isolation: worktree`):** the run root is the run worktree, so `pr` and `keep` operate from there — push the branch, or leave the worktree in place and tell the user its path (that is where the work lives). `merge` must run where the base branch is checked out — the primary dir — so cd back there, merge the run branch, delete it, then remove the run worktree. Never `git worktree remove` the worktree you are standing in; cd out first.
 
 ## Anti-noise learning rule
 Lessons are written ONLY on friction events (escalation, blocker, attended-mode user correction). First-pass-green phases write nothing to `lessons.md` — if everything is a lesson, nothing is.

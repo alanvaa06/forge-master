@@ -18,6 +18,10 @@ A parallel group is declared in the plan and contains phases that are: (a) mutua
 7. **Budget:** check `run_budget` at every batch boundary (before launching a batch). If remaining budget cannot plausibly cover the whole batch, shrink the batch or go sequential — never launch a batch you cannot finish.
 8. **Attended mode:** no new pause points. Escalation pauses arising from parallel phases are handled one at a time as the batch integrates.
 
+## Composition with run-level isolation
+
+When the run itself uses `isolation: worktree` (the default — see INIT), the run root is already a worktree and the CWD is that worktree. Phase worktrees are then created as siblings of the run root, and the `-b forge/NNN-<slug>-P<n>` branches still fork from the current run branch HEAD — the relationship is unchanged, only the parent directory differs. Name phase worktrees off the run root (e.g. `../<run-root-dirname>-P<n>`) so concurrent runs never collide on a path.
+
 ## Windows note
 
 Worktrees work on win32; always quote paths and use the sibling-directory layout (`../<repo-dirname>-forge-P<n>`) so worktrees stay outside the repo root and outside any watcher/scanner scope.
