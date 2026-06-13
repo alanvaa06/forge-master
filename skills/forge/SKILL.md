@@ -10,9 +10,9 @@ You chain the four stages below in order. You are a dispatcher, not a shortcut: 
 
 ## Stage 0 — Detect existing artifacts (enter at the right stage)
 Before starting from scratch, list what already exists and ask the user where to enter:
-- `docs/prd/NNN-*.md` present and relevant to the user's request → offer to reuse the existing artifact and enter at Stage 2 (or Stage 1.5) instead of redoing the PRD. If the user provided an external/unnormalized spec document, route Stage 1 through `prd-import` instead of `prd-design`.
-- `docs/context/spec-NNN.md` present for that PRD → offer to enter at Stage 2.
-- `docs/context/plan-NNN.md` present and approved → offer to enter at Stage 3.
+- `docs/forge/prd/NNN-*.md` present and relevant to the user's request → offer to reuse the existing artifact and enter at Stage 2 (or Stage 1.5) instead of redoing the PRD. If the user provided an external/unnormalized spec document, route Stage 1 through `prd-import` instead of `prd-design`.
+- `docs/forge/specs/spec-NNN.md` present for that PRD → offer to enter at Stage 2.
+- `docs/forge/plans/plan-NNN.md` present and approved → offer to enter at Stage 3.
 - Partial `todo.md` for that plan → this is a resume; go straight to Stage 3 (`run` INIT handles resume detection).
 The user picks the entry stage; recommend, never assume.
 

@@ -39,10 +39,10 @@ The two are complementary — install them side by side: superpowers for interac
 | Command | Input | Output | Gate |
 |---|---|---|---|
 | `/forge-master:forge` | anything — chains the full pipeline below | idea → PRD → (spec) → plan → run, every gate intact | all gates |
-| `/forge-master:prd-design` | raw idea (interview; vague ideas get 2-3 approaches to pick from first) | `docs/prd/NNN-name.md` | human gate 1 |
-| `/forge-master:prd-import` | existing PRD/spec (file, paste, Jira/Notion/Linear export) | `docs/prd/NNN-name.md` + Adjustments changelog | human gate 1 |
-| `/forge-master:spec-design` | approved PRD (optional — for architecturally non-trivial tasks) | `docs/context/spec-NNN.md` (architecture, interfaces, file map, decisions, risks) | human gate 1.5 |
-| `/forge-master:plan-design` | approved PRD (+ spec if present) | `docs/context/plan-NNN.md` (the execution contract) | human gate 2 |
+| `/forge-master:prd-design` | raw idea (interview; vague ideas get 2-3 approaches to pick from first) | `docs/forge/prd/NNN-name.md` | human gate 1 |
+| `/forge-master:prd-import` | existing PRD/spec (file, paste, Jira/Notion/Linear export) | `docs/forge/prd/NNN-name.md` + Adjustments changelog | human gate 1 |
+| `/forge-master:spec-design` | approved PRD (optional — for architecturally non-trivial tasks) | `docs/forge/specs/spec-NNN.md` (architecture, interfaces, file map, decisions, risks) | human gate 1.5 |
+| `/forge-master:plan-design` | approved PRD (+ spec if present) | `docs/forge/plans/plan-NNN.md` (the execution contract) | human gate 2 |
 | `/forge-master:run` | approved plan | autonomous loop until done/blocked → final report | — |
 
 Each command is independently invocable — or use `forge` to chain them all: it detects existing artifacts (PRD/spec/plan/partial run) and offers to enter at the right stage instead of redoing work. Starting fresh? `prd-design`. Already have a spec? `prd-import` normalizes it (testable ACs, mandatory Non-Goals, stable IDs) and shows you exactly what it changed. Task with real architecture (new interfaces, data models, multiple components)? Add `spec-design` between PRD and plan — decisions get made once, phase subagents stop re-deriving architecture. Small task? Skip it; the spec is optional by design and always subordinate to the plan.
@@ -88,17 +88,18 @@ The two tags are two execution patterns: light = **inline execution** by the orc
 
 **Finish stage.** When the suite is green, the run lands its branch per `on_complete`: `pr` (default — push + PR generated from the final report), `merge` (merge + delete branch), or `keep`. A run with blocked or plan-stale phases never merges. Phase subagents can also report "plan assumption broken" — the phase is marked `[plan-stale]`, skips escalation, and the final report recommends re-running `plan-design` on the remainder instead of executing a stale plan to exhaustion.
 
-**Persist.** Full state flushes to `docs/context/` after every phase:
+**Persist.** Two homes, by lifetime. The human-approved **artifacts** live under `docs/forge/` (versioned design contracts, one set per initiative); the loop's mutable **state** flushes to `docs/context/` after every phase (the `scaffold` skill's shared project-memory system, which forge-master integrates with rather than owns).
 
-| file | role |
-|---|---|
-| `plan-NNN.md` | frozen execution contract |
-| `spec-NNN.md` | technical design reference (optional; phases cite its sections) |
-| `todo.md` | phase status: pending / in_progress / done / blocked |
-| `results.md` | 1-4 line outcome per phase, blockers |
-| `lessons.md` | friction events only — escalations, blockers, corrections |
-| `memory.md` | one-line architecture decisions |
-| `session-log.md` | one line per session |
+| location | file | role |
+|---|---|---|
+| `docs/forge/prd/` | `NNN-name.md` | the PRD — testable acceptance criteria |
+| `docs/forge/specs/` | `spec-NNN.md` | technical design reference (optional; phases cite its sections) |
+| `docs/forge/plans/` | `plan-NNN.md` | frozen execution contract |
+| `docs/context/` | `todo.md` | phase status: pending / in_progress / done / blocked |
+| `docs/context/` | `results.md` | 1-4 line outcome per phase, blockers |
+| `docs/context/` | `lessons.md` | friction events only — escalations, blockers, corrections |
+| `docs/context/` | `memory.md` | one-line architecture decisions |
+| `docs/context/` | `session-log.md` | one line per session |
 
 **Learn.** Friction events write lessons consumed by the next `plan-design` (better triage over time). First-pass-green phases write nothing — if everything is a lesson, nothing is.
 
@@ -110,7 +111,7 @@ A phase that stays red at `senior`+`heavy` after K iterations is marked `[blocke
 
 ## Requirements
 
-- A scaffolded workspace (`docs/context/`, `docs/prd/`) — `run` checks and runs the `scaffold` skill if missing.
+- A scaffolded workspace (`docs/context/`, `docs/forge/prd/`) — `run` checks and runs the `scaffold` skill if missing.
 - A repo test framework — or `run` inserts an implicit P0 "setup test harness" phase first.
 
 ## Layout
@@ -136,7 +137,13 @@ templates/
   plan-template.md             # plan contract skeleton
   spec-template.md             # spec skeleton
 validate.mjs                   # structural acceptance test: node validate.mjs
-docs/forge-master-design.md    # full design rationale
+docs/
+  forge/                       # forge-master artifacts (created at runtime)
+    prd/NNN-name.md            #   the PRD
+    specs/spec-NNN.md          #   the technical design (optional)
+    plans/plan-NNN.md          #   the frozen execution contract
+  context/                     # scaffold's shared memory: todo, results, lessons, memory, session-log
+  forge-master-design.md       # full design rationale
 ```
 
 ## License

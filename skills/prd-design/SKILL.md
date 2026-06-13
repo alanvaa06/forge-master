@@ -1,6 +1,6 @@
 ---
 name: prd-design
-description: Interview a user from a raw idea into a testable PRD at docs/prd/NNN-name.md. Every user story gets at least one Given/When/Then acceptance criterion verifiable by test or command. Mandatory Non-Goals. Stable IDs (US-n, AC-n.m). Stops at human approval gate. Use when starting a forge-master run, or when the user says "write a PRD", "/forge-master:prd-design", or describes a feature to build.
+description: Interview a user from a raw idea into a testable PRD at docs/forge/prd/NNN-name.md. Every user story gets at least one Given/When/Then acceptance criterion verifiable by test or command. Mandatory Non-Goals. Stable IDs (US-n, AC-n.m). Stops at human approval gate. Use when starting a forge-master run, or when the user says "write a PRD", "/forge-master:prd-design", or describes a feature to build.
 disable-model-invocation: true
 ---
 
@@ -8,11 +8,11 @@ disable-model-invocation: true
 
 <!-- markers: ## Interview · Given/When/Then · Non-Goals · Definition of Done · gate 1 -->
 
-Produce `docs/prd/NNN-name.md`: the contract consumed by `plan-design`. The acceptance criteria you write here become the loop's exit conditions, so they must be verifiable.
+Produce `docs/forge/prd/NNN-name.md`: the contract consumed by `plan-design`. The acceptance criteria you write here become the loop's exit conditions, so they must be verifiable.
 
 ## Step 1 — Locate / number the PRD
-- Ensure `docs/prd/` exists. If `docs/` scaffold is absent, tell the user to run the `scaffold` skill first (or run it for them), then continue.
-- `NNN` = next zero-padded integer after the highest existing `docs/prd/NNN-*.md` (start at `001`).
+- Ensure `docs/forge/prd/` exists — forge owns the `docs/forge/` tree, so create it if missing. Separately, the `docs/context/` memory system (lessons, memory, todo, ...) is provided by the `scaffold` skill; if `docs/context/` is absent, tell the user to run `scaffold` first (or run it for them), then continue.
+- `NNN` = next zero-padded integer after the highest existing `docs/forge/prd/NNN-*.md` (start at `001`).
 - Derive `<name>` as a short kebab-case slug from the idea.
 
 ## Divergent phase — explore before converging (Step 1.5)
@@ -38,7 +38,7 @@ Cover, in roughly this order:
 - Non-executable ACs ("looks good", "feels fast"): reformulate to command-verifiable (Playwright assertion, `curl` + status, a measured threshold). If genuinely manual, mark the AC `[manual-check]` — it will be verified in the final report and must NEVER block the loop.
 
 ## Step 3 — Write the file
-Write `docs/prd/NNN-name.md` using exactly this structure:
+Write `docs/forge/prd/NNN-name.md` using exactly this structure:
 
 ```markdown
 # PRD-NNN: <name>

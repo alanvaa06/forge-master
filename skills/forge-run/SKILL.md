@@ -1,6 +1,6 @@
 ---
 name: run
-description: Execute an approved forge-master plan as an autonomous loop. Disk-backed state machine — reads docs/context/plan-NNN.md, runs phases in dependency order, verifies with the test runner (never opinion), escalates tier/process by deterministic rules, flushes state after every phase so it survives compaction, and ends with a Definition-of-Done report. Resume by re-invoking. Use when the user says "/forge-master:run", "run the forge", or asks to execute an approved plan.
+description: Execute an approved forge-master plan as an autonomous loop. Disk-backed state machine — reads docs/forge/plans/plan-NNN.md, runs phases in dependency order, verifies with the test runner (never opinion), escalates tier/process by deterministic rules, flushes state after every phase so it survives compaction, and ends with a Definition-of-Done report. Resume by re-invoking. Use when the user says "/forge-master:run", "run the forge", or asks to execute an approved plan.
 disable-model-invocation: true
 ---
 
@@ -11,7 +11,7 @@ disable-model-invocation: true
 You are the orchestrator. You ORCHESTRATE and VERIFY. You implement ONLY light phases inline (inline execution — cheap, no dispatch overhead); heavy implementation ALWAYS lives in disposable phase subagents (subagent-driven development). Live state lives on disk, not in your context.
 
 ## INIT
-1. Read `docs/context/plan-NNN.md` (ask which N if more than one and ambiguous). Read `docs/context/lessons.md` and `docs/context/todo.md`.
+1. Read `docs/forge/plans/plan-NNN.md` (ask which N if more than one and ambiguous). Read `docs/context/lessons.md` and `docs/context/todo.md`.
 2. Verify the `docs/context/` scaffold exists. If missing, run the user's `scaffold` skill first, then continue.
 3. **Resume detection:** if `todo.md` already holds this plan's phase entries with some marked `done`/`blocked`, you are RESUMING — pick up at the first non-terminal phase. Otherwise seed `todo.md` with one `[pending]` entry per phase.
 4. **Test harness check:** detect the repo's test framework. If none exists, insert an implicit phase **P0: setup test harness** and run it first — nothing can be verified without a runner.
@@ -45,7 +45,7 @@ Every red iteration follows `references/debugging.md` (read it and pass it to wh
 
 Review findings route deterministically (full contract in `references/code-review.md`): **blockers** re-enter the implementation cycle and increment `iter` — feeding the same K/escalation machinery as red tests; **nits** go to `results.md` and never block.
 
-Phase subagents receive MINIMAL context: their plan section, their ACs, relevant lessons, `memory.md`, and — when `docs/context/spec-NNN.md` exists — only each spec section their phase's `notes:` cite (its Interfaces and File Map rows), never the whole spec. **Never the run history** — your master context stays lean. If implementation reality contradicts a cited spec section, the plan wins; record the divergence in `results.md`. Dispatch protocol, report contract, and freshness policy: `references/dispatch.md`.
+Phase subagents receive MINIMAL context: their plan section, their ACs, relevant lessons, `memory.md`, and — when `docs/forge/specs/spec-NNN.md` exists — only each spec section their phase's `notes:` cite (its Interfaces and File Map rows), never the whole spec. **Never the run history** — your master context stays lean. If implementation reality contradicts a cited spec section, the plan wins; record the divergence in `results.md`. Dispatch protocol, report contract, and freshness policy: `references/dispatch.md`.
 
 ### Verification is commands, not judgment
 "Green" is decided by the test runner exit code, never by an agent's opinion — this guards against hallucinated progress. **Double anti-regression check:** the phase's covered-AC tests AND the full repo suite must both pass, so a new phase can never silently break a past phase.

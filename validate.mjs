@@ -71,7 +71,7 @@ const SKILLS = [
   {
     path: 'skills/spec-design/SKILL.md',
     name: 'spec-design',
-    markers: ['## Architecture', 'Interfaces', 'File Map', 'docs/context/spec-', 'OPTIONAL', 'gate 1.5'],
+    markers: ['## Architecture', 'Interfaces', 'File Map', 'docs/forge/specs/spec-', 'OPTIONAL', 'gate 1.5'],
   },
   {
     path: 'skills/plan-design/SKILL.md',

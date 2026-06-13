@@ -1,4 +1,4 @@
-# Spec-NNN: <name>  (PRD: docs/prd/NNN-name.md)
+# Spec-NNN: <name>  (PRD: docs/forge/prd/NNN-name.md)
 
 > Technical design reference. Approved at human gate 1.5, BEFORE plan-design. Subordinate to the plan:
 > the plan is the only execution contract — phases CITE spec sections; the spec never overrides the plan.

@@ -1,4 +1,4 @@
-# Plan-NNN: <name>  (PRD: docs/prd/NNN-name.md)
+# Plan-NNN: <name>  (PRD: docs/forge/prd/NNN-name.md)
 
 > Execution contract. After human gate 2 approval this file is FROZEN — the loop reads it and asks nothing.
 

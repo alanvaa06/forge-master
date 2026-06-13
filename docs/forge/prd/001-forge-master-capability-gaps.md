@@ -1,6 +1,6 @@
 # PRD-001: forge-master-capability-gaps
 
-> Imported 2026-06-12 (provisional PRD-006 renumbered to 001 — docs/prd/ was empty at import). Implemented in v0.4.0.
+> Imported 2026-06-12 (provisional PRD-006 renumbered to 001 — docs/forge/prd/ was empty at import). Implemented in v0.4.0.
 
 ## Goal
 Close the six capability gaps found auditing forge-master v0.3.0 against its design spec and the superpowers discipline it replicates natively: end-to-end umbrella command, divergent PRD exploration, a specified `attended` mode, TDD Iron Law in the run loop, a real code-review contract, and run completion that actually lands the branch (finish stage + re-plan trigger). The plugin must remain self-contained — no runtime dependency on superpowers.
@@ -18,7 +18,7 @@ Close the six capability gaps found auditing forge-master v0.3.0 against its des
 As a forge-master user, I want a single `/forge-master:forge` entry point that chains prd-design → (spec-design if warranted) → plan-design → run, so that I launch a full pipeline with one invocation while keeping every human gate intact.
 - AC-1.1: Given the plugin installed, When `skills/forge/SKILL.md` is inspected, Then it exists with frontmatter `name: forge` and instructions chaining the four stages in order, each stopping at its existing human gate. Verified by `node validate.mjs` extended with a structural check for the file and its required markers.
 - AC-1.2: Given a raw idea passed to `/forge-master:forge`, When the pipeline runs, Then no gate is skipped: PRD approval and plan approval each require explicit user confirmation before the next stage starts. `[manual-check]`
-- AC-1.3: Given the user already has `docs/prd/NNN-name.md` approved, When invoking the umbrella, Then it detects the existing artifact and offers to enter at the corresponding later stage instead of redoing the PRD. `[manual-check]`
+- AC-1.3: Given the user already has `docs/forge/prd/NNN-name.md` approved, When invoking the umbrella, Then it detects the existing artifact and offers to enter at the corresponding later stage instead of redoing the PRD. `[manual-check]`
 
 ### US-2: Divergent mode in prd-design
 As a user with a raw or vague idea, I want prd-design to run a divergent exploration phase (2-3 approaches with trade-offs) before the convergent story/AC interview, so that creative work gets direction chosen before requirements get frozen.
