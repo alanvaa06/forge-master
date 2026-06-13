@@ -74,4 +74,9 @@ Before presenting, produce a short changelog of how the source was transformed, 
 - **Dropped:** any story removed for having no testable AC, with the reason.
 
 ## Step 6 — Human gate 1
-Present the normalized PRD plus the Adjustments changelog. Ask for explicit approval. Do NOT proceed to `plan-design` until the user approves. On approval, ASK the user — never decide for them: "Next step: write a technical spec first (`/forge-master:spec-design`) or go straight to the plan (`/forge-master:plan-design`)?" Give your recommendation with a one-line reason (spec when: new interfaces, data models, multiple components that must agree; skip when: small task, obvious structure). The user chooses.
+Present the normalized PRD plus the Adjustments changelog. Ask for explicit approval. Do NOT proceed to `plan-design` until the user approves. On approval, ASK the user — never decide for them — as a lettered list, mark one **Recommended** with a one-line reason:
+> PRD approved. Next step:
+> a) Write a technical spec first (`/forge-master:spec-design`) — **Recommended**, new interfaces, data models, or multiple components that must agree
+> b) Go straight to the plan (`/forge-master:plan-design`) — small task, obvious structure
+
+Pick the recommendation by the spec-vs-skip heuristic in the reasons above (recommend (b) for a small, obviously structured task). The user chooses by replying with a letter.

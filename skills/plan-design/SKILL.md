@@ -13,7 +13,12 @@ Produce `docs/forge/plans/plan-NNN.md` from `docs/forge/prd/NNN-name.md`. After 
 ## Step 1 — Load inputs
 - Read the target PRD `docs/forge/prd/NNN-name.md` (ask which N if ambiguous).
 - If `docs/forge/specs/spec-NNN.md` exists (produced by `spec-design`), read it. Phases then follow its File Map and Interfaces, `notes:` cite the spec sections a phase implements, and the spec's Risks inform tagging — a phase touching a listed risk does not start `junior`/`light`.
-- If NO spec exists and the PRD looks architecturally non-trivial (new interfaces, data models, multiple components that must agree), ASK the user ONCE before decomposing: "No spec found — run `/forge-master:spec-design` first, or plan directly?" Give a one-line recommendation; the user decides. Never assume either way. For a clearly small task, proceed without asking — the spec is optional and subordinate to this plan.
+- If NO spec exists and the PRD looks architecturally non-trivial (new interfaces, data models, multiple components that must agree), ASK the user ONCE before decomposing, as a lettered list (mark one **Recommended** with a concrete why) — never assume either way:
+  > No spec found, and this PRD looks architecturally non-trivial. Next:
+  > a) Run `/forge-master:spec-design` first — **Recommended**, new interfaces / data models / components that must agree
+  > b) Plan directly — you accept resolving design inline as phases are decomposed
+
+  The user picks by replying with a letter. For a clearly small task, proceed without asking — the spec is optional and subordinate to this plan.
 - Read `docs/context/lessons.md`. Past escalation lessons ("P-type X tagged light escalated — tag heavy when <pattern>") MUST inform your tagging. This is the triage learning loop.
 - Read `templates/plan-template.md` (from this plugin) as the output skeleton.
 
@@ -45,4 +50,9 @@ For a large or heavy plan, optionally hand off to the `budget` skill (`/forge-ma
 Write `docs/forge/plans/plan-NNN.md` (create `docs/forge/plans/` if it does not exist) by filling `templates/plan-template.md` completely — no `<...>` placeholders left.
 
 ## Step 6 — Human gate 2
-Present: the phase list, each phase's tier/process tags WITH the reasoning (and any lesson that drove a non-default tag), the total-coverage table, and — when declared — the Parallel Groups with their file-disjointness reasoning (the human approves parallelism as part of the frozen contract). Ask for explicit approval. On approval the plan is FROZEN. Tell the user the next step is `/forge-master:run`.
+Present: the phase list, each phase's tier/process tags WITH the reasoning (and any lesson that drove a non-default tag), the total-coverage table, and — when declared — the Parallel Groups with their file-disjointness reasoning (the human approves parallelism as part of the frozen contract). Ask for explicit approval. On approval the plan is FROZEN. Then present the next step as a lettered list:
+> Plan approved and frozen. Next:
+> a) Proceed to `/forge-master:run` — **Recommended**, executes the frozen contract now
+> b) Hold — stop here; resume later by re-invoking `/forge-master:run`
+
+The user chooses by replying with a letter.

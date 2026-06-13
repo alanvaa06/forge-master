@@ -70,10 +70,21 @@ A phase subagent may report **"plan assumption broken"** — the plan's premise 
 - The final report must recommend re-running `plan-design` on the unfinished remainder, citing the broken assumptions.
 
 ## Attended mode
-`mode:` comes frozen from Run Config. **`autonomous` (default) never pauses at any of these points.** `attended` pauses at EXACTLY three:
-1. **Before each ESCALATE** — present the trigger and proposed bump; user may approve it, override (different bump), or abort the phase (mark `[blocked]`).
-2. **On BLOCK** — user may unblock with guidance (guidance goes to the phase subagent AND `lessons.md` as a correction), skip the phase, or stop the run cleanly.
-3. **At the Finish stage** — user confirms the `on_complete` action before it executes.
+`mode:` comes frozen from Run Config. **`autonomous` (default) never pauses at any of these points.** `attended` pauses at EXACTLY three. At each, present the choices as a lettered list and mark one **Recommended** so the user can reply with a single letter:
+
+1. **Before each ESCALATE** — present the trigger and the proposed bump:
+   > a) Approve the proposed bump (`<from>`→`<to>`) — **Recommended**, follows the deterministic escalation rule
+   > b) Override with a different bump
+   > c) Abort the phase (mark `[blocked]`)
+2. **On BLOCK**:
+   > a) Unblock with guidance — **Recommended** if you can name the fix; guidance goes to the phase subagent AND `lessons.md` as a correction
+   > b) Skip the phase (mark `[blocked]`, continue independent branches)
+   > c) Stop the run cleanly
+3. **At the Finish stage** — confirm the `on_complete` action before it executes:
+   > a) Proceed with `<on_complete>` (the Run Config action: pr/merge/keep) — **Recommended**, the approved config
+   > b) Use a different finish action
+   > c) Stop without landing
+
 No other pause points exist; attended mode does not turn the loop conversational.
 
 ## State discipline

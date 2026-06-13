@@ -10,7 +10,12 @@ disable-model-invocation: true
 
 Produce `docs/forge/specs/spec-NNN.md` from an approved `docs/forge/prd/NNN-name.md`: the HOW that sits between the PRD's WHAT and the plan's WHEN. Decisions get made once here, so phase subagents never re-derive architecture inconsistently.
 
-**This step is OPTIONAL by design.** The loop's philosophy is optimistic defaults — if the task looks small (few phases, obvious structure, no new interfaces), say so and ASK the user whether to skip to `plan-design`; the user decides, never you. A spec is warranted when any of: multiple components must agree on interfaces, a data model or API contract is being introduced/changed, the PRD's Constraints imply architectural tradeoffs, or `lessons.md` shows past runs failing on design drift.
+**This step is OPTIONAL by design.** The loop's philosophy is optimistic defaults — if the task looks small (few phases, obvious structure, no new interfaces), say so and ASK the user as a lettered list (mark one **Recommended** with a concrete why), never decide yourself:
+> This task looks small. Proceed with the spec?
+> a) Skip the spec, go straight to `/forge-master:plan-design` — **Recommended**, small task with obvious structure
+> b) Write the spec anyway — you want the design locked before planning
+
+A spec is warranted when any of: multiple components must agree on interfaces, a data model or API contract is being introduced/changed, the PRD's Constraints imply architectural tradeoffs, or `lessons.md` shows past runs failing on design drift — when these hold, recommend (b) instead. The user picks by replying with a letter.
 
 **Subordination rule:** the plan (`plan-NNN.md`) is the ONLY execution contract. The spec is a design reference the plan cites — if they ever conflict, the plan wins and the spec gets corrected.
 
@@ -40,4 +45,9 @@ If anything genuinely cannot be decided from the PRD, repo, and memory — colle
 Write `docs/forge/specs/spec-NNN.md` (create `docs/forge/specs/` if it does not exist) by filling `templates/spec-template.md` completely — no `<...>` placeholders left.
 
 ## Step 5 — Human gate 1.5
-Present: the architecture summary, key decisions with reasoning, the risk list, and the story-coverage check. Ask for explicit approval. On approval, tell the user the next step is `/forge-master:plan-design` — which will read this spec and cite its sections in the phases.
+Present: the architecture summary, key decisions with reasoning, the risk list, and the story-coverage check. Ask for explicit approval. On approval, present the next step as a lettered list:
+> Spec approved. Next:
+> a) Proceed to `/forge-master:plan-design` — **Recommended**, it reads this spec and cites its sections in the phases
+> b) Not yet — revise the spec first
+
+The user chooses by replying with a letter.

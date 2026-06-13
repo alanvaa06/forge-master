@@ -10,6 +10,19 @@ disable-model-invocation: true
 
 Produce `docs/forge/prd/NNN-name.md`: the contract consumed by `plan-design`. The acceptance criteria you write here become the loop's exit conditions, so they must be verifiable.
 
+## Two habits that run through the whole interview
+These apply to every question you ask below, including the divergent phase.
+
+**Recommend, don't just enumerate.** Any time you offer a choice — an approach, an AC phrasing, a constraint, the next step — present it as a lettered list and mark exactly one option **Recommended** with a one-line, concrete reason. Ground the reason in something real: matches an existing pattern in the codebase, lowest risk, smallest scope, fits a constraint the user already stated. The list lets the user answer with a single letter; you carry the weighing so they don't have to evaluate every option cold. Format:
+> <question?>
+> a) <option A> — **Recommended**, <concrete why, e.g. "matches current pattern in auth.ts">
+> b) <option B> — <trade-off>
+> c) <option C> — <trade-off>
+
+This applies especially to next-step handoffs between skills/commands (e.g. PRD → spec → plan): always lay the choices out as a lettered list, never bury them in prose.
+
+**Close every question — assume nothing.** The interview covers a fixed set of topics (the six in Step 2). Treat them as an open-questions ledger: it is done only when the user has answered *every* one. A default you proposed is not an answer until the user confirms it — nothing enters the PRD on your authority alone. Users will interrupt, jump ahead, or try to short-circuit ("looks good, just write it"); when they do, absorb the new information, then name what is still open and return to it. A silently skipped question is a hole in the contract that resurfaces downstream as drift or a missing acceptance criterion — closing all of them is exactly what this gate exists for. Resuming sounds like: *"Got it — that covers US-2's criteria. Still open: Non-Goals and Constraints. Next: <question>."*
+
 ## Step 1 — Locate / number the PRD
 - Ensure `docs/forge/prd/` exists — forge owns the `docs/forge/` tree, so create it if missing. Separately, the `docs/context/` memory system (lessons, memory, todo, ...) is provided by the `scaffold` skill; if `docs/context/` is absent, tell the user to run `scaffold` first (or run it for them), then continue.
 - `NNN` = next zero-padded integer after the highest existing `docs/forge/prd/NNN-*.md` (start at `001`).
@@ -17,11 +30,11 @@ Produce `docs/forge/prd/NNN-name.md`: the contract consumed by `plan-design`. Th
 
 ## Divergent phase — explore before converging (Step 1.5)
 Assess the input's maturity before any story is drafted:
-- **Raw/vague idea** (a wish, a problem statement, no clear shape — "something to manage my reading backlog"): DIVERGE first. Propose **2-3 distinct approaches** with one-line trade-offs each (scope, effort, risk) and your recommendation. The user picks the direction. Only then start the convergent interview below — direction gets chosen before requirements get frozen.
+- **Raw/vague idea** (a wish, a problem statement, no clear shape — "something to manage my reading backlog"): DIVERGE first. Propose **2-3 distinct approaches** with one-line trade-offs each (scope, effort, risk), and mark one **Recommended** with a concrete why (use the recommend habit above). The user picks the direction. Only then start the convergent interview below — direction gets chosen before requirements get frozen.
 - **Specific idea** (clear scope, named feature, known shape): skip the divergent phase entirely and go straight to the interview. Do not manufacture alternatives for an already-decided direction.
 
 ## Step 2 — Interview (one question at a time)
-Brainstorming style: ask ONE question, wait, incorporate, propose, let the user correct. Do not dump a full PRD up front. Explore intent before structure.
+Brainstorming style: ask ONE question, wait, incorporate, propose, let the user correct. Do not dump a full PRD up front. Explore intent before structure. Apply both habits above to every question: recommend an option, and keep the ledger until all six topics are answered by the user.
 
 Cover, in roughly this order:
 1. **Goal** — what and why, in 1-3 lines.
@@ -32,6 +45,7 @@ Cover, in roughly this order:
 6. **Definition of Done** — all ACs green, plus any extras (lint, docs, coverage).
 
 ## Hard rules (enforce during the interview, do not skip)
+- **No topic silently skipped; nothing assumed on the user's behalf.** All six topics must be answered by the user before you write the file. If they interrupt or jump ahead, absorb the input and loop back to what is still open. A default you proposed counts only once the user confirms it — you never grant an answer to yourself.
 - **Every story has >= 1 AC. Every AC is Given/When/Then and verifiable by test or command.** A story with no testable AC does NOT enter the PRD — reformulate it or drop it.
 - **Non-Goals is mandatory.**
 - **Stable IDs** (`US-n`, `AC-n.m`) never reused or renumbered — plan, todo, tests, and commits reference them. This is the PRD->phase->test->commit traceability spine.
@@ -64,4 +78,12 @@ As a <role>, I want <action>, so that <benefit>.
 ```
 
 ## Step 4 — Human gate 1
-Present the finished PRD. Ask for explicit approval. Do NOT proceed to `plan-design` until the user approves. On approval, ASK the user — never decide for them: "Next step: write a technical spec first (`/forge-master:spec-design`) or go straight to the plan (`/forge-master:plan-design`)?" Give your recommendation with a one-line reason (spec when: new interfaces, data models, multiple components that must agree; skip when: small task, obvious structure). The user chooses.
+Present the finished PRD. Ask for explicit approval. Do NOT proceed to `plan-design` until the user approves.
+
+On approval, ASK the user — never decide for them — and lay the next step out as a lettered list (recommend habit above), e.g.:
+
+> PRD approved. Next step:
+> a) Write a technical spec first (`/forge-master:spec-design`) — **Recommended**, <reason: new interfaces, data models, multiple components that must agree>
+> b) Go straight to the plan (`/forge-master:plan-design`) — <reason: small task, obvious structure>
+
+Pick the recommendation by the spec-vs-skip heuristic in the reasons above. The user chooses by replying with a letter.

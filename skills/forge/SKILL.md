@@ -14,13 +14,18 @@ Before starting from scratch, list what already exists and ask the user where to
 - `docs/forge/specs/spec-NNN.md` present for that PRD → offer to enter at Stage 2.
 - `docs/forge/plans/plan-NNN.md` present and approved → offer to enter at Stage 3.
 - Partial `todo.md` for that plan → this is a resume; go straight to Stage 3 (`run` INIT handles resume detection).
-The user picks the entry stage; recommend, never assume.
+
+Present the entry point as a lettered list of only the stages that apply given what you found, mark one **Recommended** with a concrete why (the furthest-along stage matching the request — reusing approved artifacts beats redoing them), and let the user pick by letter. Never assume the entry stage. Example:
+> Found `docs/forge/prd/002-billing.md` (approved) and `spec-002.md`. Enter at:
+> a) Stage 2 — `plan-design` using the existing PRD + spec — **Recommended**, both artifacts already approved
+> b) Stage 1.5 — revise the spec first
+> c) Stage 1 — start a fresh PRD (ignores existing)
 
 ## Stage 1 — PRD (human gate 1)
 Invoke the `prd-design` skill (or `prd-import` for an existing document) and follow it fully — divergent exploration, convergent interview, hard AC rules. Stop at its approval gate. Do not continue until the user explicitly approves the PRD.
 
 ## Stage 1.5 — Spec (optional, human gate 1.5)
-After PRD approval, ask the spec-or-plan question exactly as `prd-design` specifies (recommend, user decides). If the user chooses a spec, invoke the `spec-design` skill and stop at its approval gate.
+After PRD approval, ask the spec-or-plan question exactly as `prd-design`/`prd-import` specify — a lettered list with one option marked **Recommended**, user decides. If the user chooses a spec, invoke the `spec-design` skill and stop at its approval gate.
 
 ## Stage 2 — Plan (human gate 2)
 Invoke the `plan-design` skill and follow it fully — decomposition, tagging, total coverage proof. For a large or heavy plan, optionally hand off to the `budget` skill before approval to estimate token cost and fill `phase_budget` / `run_budget`. Stop at the approval gate. The approved plan (budgets included) is the frozen execution contract.

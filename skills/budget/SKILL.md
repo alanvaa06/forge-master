@@ -10,7 +10,12 @@ disable-model-invocation: true
 
 Turn the plan's hand-waved budget heuristics into principled numbers. You estimate the token cost of each phase from signals already in the plan, present a matrix, and fill the `phase_budget` / `run_budget` fields the loop already consumes (`phase_budget` → early-escalation signal; `run_budget` → clean-stop cap).
 
-**This step is OPTIONAL.** Small plans (few light phases) don't need it — the default heuristics are fine; say so and skip. It is worth running when the plan is large, has heavy phases, declares parallel groups, or the user wants a cost ceiling set with eyes open.
+**This step is OPTIONAL.** Small plans (few light phases) don't need it — the default heuristics are fine. When the plan looks small, say so and offer the choice as a lettered list (mark one **Recommended**) rather than deciding silently:
+> This plan is small (few light phases). Estimate the budget?
+> a) Skip — **Recommended**, default heuristics are fine here; return to gate 2
+> b) Run the matrix anyway — you want a cost ceiling set with eyes open
+
+It is worth running when the plan is large, has heavy phases, declares parallel groups, or the user wants a cost ceiling set with eyes open — recommend (b) in those cases.
 
 **Timing matters.** Run AFTER `plan-design` has decomposed phases but BEFORE gate-2 approval — the budgets you write become part of the FROZEN contract, approved by the human alongside the phase list. Never edit an already-frozen plan; if invoked on one, re-open it explicitly for re-approval.
 
