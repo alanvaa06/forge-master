@@ -7,8 +7,8 @@
 - branch: forge/NNN-<slug>
 - isolation: worktree         # worktree = run in a sibling git worktree, primary dir + your editor untouched (default; required for safe concurrent work) | in-place = checkout the run branch in the current dir (only when this is the sole session on the repo)
 - K: 3                        # max consecutive red iterations per phase before escalate-or-block
-- phase_budget: <tokens>      # soft early-escalation signal, not a hard kill
-- run_budget: <tokens>        # global cap; on exhaustion stop cleanly with report
+- phase_budget: <tokens>      # raw integer, no separators (gate card shows commas); soft early-escalation signal, not a hard kill
+- run_budget: <tokens>        # raw integer, no separators (gate card shows commas); global cap, on exhaustion stop cleanly with report
 - on_complete: pr             # pr | merge | keep — pr = push branch + open PR from final report (default) | merge = merge into base + delete run branch | keep = leave branch, report where it lives
 - max_parallel: 1             # 1 = fully sequential (default); >1 = max concurrent phases per batch, requires ## Parallel Groups below
 

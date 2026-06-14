@@ -52,7 +52,7 @@ Write `docs/forge/plans/plan-NNN.md` (create `docs/forge/plans/` if it does not 
 Present TWO blocks, then gate.
 
 ### Block A — Run Config card
-Render the frozen-candidate config with a health mark on each diagnosable line (`✓` healthy · `⚠` advisory · `⛔` hard-block):
+Render the frozen-candidate config with a health mark on each diagnosable line (`✓` healthy · `⚠` advisory · `⛔` hard-block). Format `phase_budget` / `run_budget` with thousands separators for readability (e.g. `250,000`, `1,200,000`) — this is display only; the persisted plan `## Run Config` keeps them as raw integers (no separators) so the loop's budget math stays unambiguous.
 
 ```
 ## Run Config — review before freeze
@@ -61,8 +61,8 @@ Render the frozen-candidate config with a health mark on each diagnosable line (
 - **isolation:** <worktree|in-place> · <primary dir untouched | shares the working dir>   <mark>
 - **K:** <n> · max self-heal red iterations/phase before escalate
 - **max_parallel:** <n> · <sequential | concurrent per group>      <mark>
-- **phase_budget:** ~<n> · soft early-escalation signal            <mark>
-- **run_budget:** ~<n> · global cap, clean-stop on exhaust         <mark>
+- **phase_budget:** ~<n,nnn> · soft early-escalation signal        <mark>
+- **run_budget:** ~<n,nnn> · global cap, clean-stop on exhaust     <mark>
 - **on_complete:** <pr|merge|keep> · <one-line meaning>
 - **gates (every phase):** <gate cmds the run will enforce>
 ```
