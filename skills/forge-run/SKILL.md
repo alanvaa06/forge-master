@@ -1,7 +1,6 @@
 ---
 name: run
 description: Execute an approved forge-master plan as an autonomous loop. Disk-backed state machine — reads docs/forge/plans/plan-NNN.md, runs phases in dependency order, verifies with the test runner (never opinion), escalates tier/process by deterministic rules, flushes state after every phase so it survives compaction, and ends with a Definition-of-Done report. Resume by re-invoking. Use when the user says "/forge-master:run", "run the forge", or asks to execute an approved plan.
-disable-model-invocation: true
 ---
 
 # run — forge-master Master Loop

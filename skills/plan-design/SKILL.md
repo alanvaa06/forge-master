@@ -1,7 +1,6 @@
 ---
 name: plan-design
 description: Decompose an approved PRD into docs/forge/plans/plan-NNN.md — phases tagged tier (junior/senior) and process (light/heavy), each mapped to the ACs it covers, with a proven total-coverage table and an acyclic depends_on graph. Reads docs/context/lessons.md so past escalations improve triage. Stops at human approval gate. Use after a PRD is approved, or when the user says "write the plan" or "/forge-master:plan-design".
-disable-model-invocation: true
 ---
 
 # plan-design — PRD to Execution Contract (Human Gate 2)
@@ -18,7 +17,7 @@ Produce `docs/forge/plans/plan-NNN.md` from `docs/forge/prd/NNN-name.md`. After 
   > a) Run `/forge-master:spec-design` first — **Recommended**, new interfaces / data models / components that must agree
   > b) Plan directly — you accept resolving design inline as phases are decomposed
 
-  The user picks by replying with a letter. For a clearly small task, proceed without asking — the spec is optional and subordinate to this plan.
+  The user picks by replying with a letter. On (a), INVOKE `forge-master:spec-design` yourself via the Skill tool rather than asking the user to type it. For a clearly small task, proceed without asking — the spec is optional and subordinate to this plan.
 - Read `docs/context/lessons.md`. Past escalation lessons ("P-type X tagged light escalated — tag heavy when <pattern>") MUST inform your tagging. This is the triage learning loop.
 - Read `templates/plan-template.md` (from this plugin) as the output skeleton.
 
@@ -104,4 +103,4 @@ On approval the plan is FROZEN. Then present the next step as a lettered list:
 > a) Proceed to `/forge-master:run` — **Recommended**, executes the frozen contract now
 > b) Hold — stop here; resume later by re-invoking `/forge-master:run`
 
-The user chooses by replying with a letter.
+The user chooses by replying with a letter. On (a), INVOKE `forge-master:run` yourself via the Skill tool — do NOT ask the user to type the command; once they approve, execution starts automatically. On (b), stop.

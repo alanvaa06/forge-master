@@ -100,4 +100,4 @@ On approval, ASK the user — never decide for them — and lay the next step ou
 > a) Write a technical spec first (`/forge-master:spec-design`) — **Recommended**, <reason: new interfaces, data models, multiple components that must agree>
 > b) Go straight to the plan (`/forge-master:plan-design`) — <reason: small task, obvious structure>
 
-Pick the recommendation by the spec-vs-skip heuristic in the reasons above. The user chooses by replying with a letter.
+Pick the recommendation by the spec-vs-skip heuristic in the reasons above. The user chooses by replying with a letter. On their choice, INVOKE the chosen skill yourself via the Skill tool — `forge-master:spec-design` for (a), `forge-master:plan-design` for (b). Do NOT ask the user to type the command; once they approve, the chain proceeds automatically.

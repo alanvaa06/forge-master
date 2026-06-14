@@ -1,7 +1,6 @@
 ---
 name: spec-design
 description: Turn an approved PRD into a technical design spec at docs/forge/specs/spec-NNN.md — architecture, components, exact interfaces, file map, resolved decisions, and risks that feed plan tagging. Optional step between prd-design/prd-import and plan-design; skip it for small tasks. Stops at human approval gate. Use after a PRD is approved when the task is architecturally non-trivial, or when the user says "write the spec", "design this", or "/forge-master:spec-design".
-disable-model-invocation: true
 ---
 
 # spec-design — PRD to Technical Design (Human Gate 1.5)
@@ -52,4 +51,4 @@ Present: the architecture summary, key decisions with reasoning, the risk list, 
 > a) Proceed to `/forge-master:plan-design` — **Recommended**, it reads this spec and cites its sections in the phases
 > b) Not yet — revise the spec first
 
-The user chooses by replying with a letter.
+The user chooses by replying with a letter. On (a), INVOKE `forge-master:plan-design` yourself via the Skill tool — do NOT ask the user to type the command; once they approve, the chain proceeds automatically. On (b), revise the spec.
