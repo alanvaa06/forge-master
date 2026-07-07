@@ -18,7 +18,7 @@ You are the orchestrator. You ORCHESTRATE and VERIFY. You implement ONLY light p
    - **`in-place`:** `git checkout -b forge/NNN-<slug>` in the current dir. This moves the shared working dir onto the run branch, so any concurrent session or open editor collides. Use ONLY when this is the sole session on the repo; if `git worktree list` or recent commits on another branch suggest other live work, warn the user and switch to `worktree`.
    - From here, **the run root** = wherever you just landed. Every read, write, commit, and phase worktree below happens there.
 3. **Scaffold check.** In the run root, verify `docs/context/` exists. If missing, run the user's `scaffold` skill first, then continue.
-4. **Resume detection.** Read `docs/context/todo.md` and `docs/context/lessons.md` in the run root. If `todo.md` already holds this plan's phase entries with some marked `done`/`blocked`, you are RESUMING — pick up at the first non-terminal phase. Otherwise seed `todo.md` with one `[pending]` entry per phase.
+4. **Resume detection.** In the run root, run `node <skill-dir>/scripts/forge-state.mjs seed docs/forge/plans/plan-NNN.md` — idempotent: it seeds one `[pending]` entry per phase, or reports `resume: true` when this plan's entries already exist (you are RESUMING; `next` picks up at the first executable phase). Then read `docs/context/lessons.md`. Fallback — node missing, or `todo.md` holds this plan's entries in a pre-script format — do the same by hand per the State discipline rules.
 5. **Test harness check:** detect the repo's test framework. If none exists, insert an implicit phase **P0: setup test harness** and run it first — nothing can be verified without a runner.
 
 ## LOOP — while executable phases remain
@@ -27,17 +27,19 @@ An "executable" phase is `[pending]` with all `depends_on` satisfied (those phas
 **Parallel batches:** when the plan declares Parallel Groups and Run Config `max_parallel` > 1, executable phases belonging to the same group launch as a concurrent batch per `references/parallel.md` (read it first). Everything else about each phase — tags, TDD, review, K, escalation, debugging — applies unchanged; only WHERE it runs (a worktree) and WHEN it integrates (sequential merge with full-suite check after each) differ.
 
 ```
-phase = next pending phase whose depends_on are all done
-todo.md: phase -> in_progress        (FLUSH)
+phase = forge-state next <plan>      (first [pending] whose depends_on are all done;
+                                      --all lists every executable, for parallel batches)
+forge-state set <P> in_progress      (FLUSH)
 execute phase per its process/tier (table below)
 verify: run the phase's covered-AC tests AND the full repo test suite
   green -> git commit "P<n>: <name> [AC-x.y, ...]"
-           todo.md: phase -> done; append 1-4 line results.md entry   (FLUSH)
+           forge-state set <P> done; append 1-4 line results.md entry   (FLUSH)
            -> next phase
   red   -> iter++
            if iter >= K and (tier or process not maxed):  ESCALATE
            if iter >= K and already senior+heavy:          BLOCK
 ```
+`forge-state next` returning `phase: null, all_terminal: true` ends the LOOP -> go to END. `phase: null` with non-terminal entries left means only in-flight work remains — finish it; never invent a phase the script did not return.
 
 Every red iteration follows `references/debugging.md` (read it and pass it to whoever owns the fix) — no retry without a root-cause hypothesis; a stuck report must include the hypotheses tested.
 
@@ -63,12 +65,12 @@ Trigger when `iter >= K` OR any free signal fires: junior subagent declares stuc
 
 ### BLOCK (only when already senior+heavy and still red at K)
 - Write the blocker to `results.md` and a lesson to `lessons.md`.
-- `todo.md`: phase -> `[blocked]`; mark every dependent phase `[blocked-upstream]`.
+- `forge-state set <P> blocked` — the script cascades `[blocked-upstream]` to every pending transitive dependent; do not mark them by hand.
 - Continue with independent branches of the graph. Never request human input mid-run (autonomous mode).
 
 ### Re-plan trigger (stale plan ≠ stuck phase)
 A phase subagent may report **"plan assumption broken"** — the plan's premise for this phase is false (interface it builds on doesn't exist as planned, AC contradicts repo reality, dependency phase produced something incompatible). This is NOT "stuck", so escalation would burn tokens on an unwinnable phase:
-- Mark the phase `[plan-stale]` in `todo.md` (skip ESCALATE for it entirely).
+- `forge-state set <P> plan-stale` (skip ESCALATE for it entirely; cascades `[blocked-upstream]` like BLOCK).
 - Record the broken assumption in `results.md` + a lesson.
 - Continue independent branches as with BLOCK.
 - The final report must recommend re-running `plan-design` on the unfinished remainder, citing the broken assumptions.
@@ -93,6 +95,8 @@ No other pause points exist; attended mode does not turn the loop conversational
 
 ## State discipline
 **After EVERY phase, flush full state to disk** (todo, results, lessons, the commit). Compaction or a crash loses at most the in-flight phase. **Resume = re-invoke `/forge-master:run`** — INIT detects the partial `todo.md` and continues. Multi-session for free.
+
+**Every `todo.md` mutation goes through `scripts/forge-state.mjs`** (zero-dep node, lives next to this skill; canonical line format `- [status] plan-NNN P<n>: <name>`). Full invocation — the plan file is always the first argument: `node <skill-dir>/scripts/forge-state.mjs <seed|next|set|status> docs/forge/plans/plan-NNN.md [P-id status] [--all]` (add `--todo <path>` only if todo.md is not at `docs/context/todo.md`). Subcommands: `seed` at INIT (idempotent), `next [--all]` for phase selection, `set <P-id> <status>` for every flush (`blocked`/`plan-stale` cascade `blocked-upstream` automatically), `status` for the terminal check before END. Output is JSON — trust it over re-parsing the markdown yourself; deterministic bookkeeping is cheaper than reasoning and immune to post-compaction misreads. Manual fallback ONLY when node is unavailable or the entries predate the canonical format — then follow the same rules by hand.
 
 ## Keeping the loop alive (harness-enforced, optional)
 The stop condition ("all phases terminal") lives in this skill's prose — the harness does not enforce it. Two user-invoked primitives harden an autonomous run. Suggest them ONCE, in the status line right before phase 1 of a fresh autonomous run (never mid-run, never on resume, never in attended mode):

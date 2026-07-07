@@ -14,7 +14,7 @@ A parallel group is declared in the plan and contains phases that are: (a) mutua
 4. **Integration (sequential, by phase number):** when the batch completes, the orchestrator merges each phase branch into the run branch in ascending phase order. After EACH merge, run the FULL repo suite on the run branch.
    - Merge conflict OR red suite after merge = **integration failure**: do not resolve inside the worktree. Count it as a red iteration for that phase (`debugging.md` applies — diagnose, don't blind-retry), and re-run the phase SEQUENTIALLY on top of the updated run branch (which now contains the already-merged siblings). Its iter/K/escalation machinery applies unchanged.
 5. **Cleanup:** after a phase branch merges (or its phase is re-run sequentially), remove its worktree (`git worktree remove`) and delete the phase branch. Never leave dangling worktrees — list and clean them in END as a guarantee.
-6. **State:** `todo.md` marks batch members `[in_progress-parallel]`. Full state flush happens per merged phase (commit, todo, results), preserving the at-most-one-phase-lost guarantee.
+6. **State:** mark batch members via `forge-state set <P> in_progress-parallel` (the state script — see State discipline in SKILL.md). Full state flush happens per merged phase (commit, `forge-state set <P> done`, results), preserving the at-most-one-phase-lost guarantee.
 7. **Budget:** check `run_budget` at every batch boundary (before launching a batch). If remaining budget cannot plausibly cover the whole batch, shrink the batch or go sequential — never launch a batch you cannot finish.
 8. **Attended mode:** no new pause points. Escalation pauses arising from parallel phases are handled one at a time as the batch integrates.
 

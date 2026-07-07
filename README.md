@@ -23,7 +23,8 @@ Local development / testing a clone:
 ```bash
 claude --plugin-dir .          # loads the plugin without installing
 claude plugin validate .       # official manifest validation
-node validate.mjs              # this repo's structural acceptance test
+node validate.mjs              # this repo's structural acceptance test (runs the unit tests too)
+node --test skills/forge-run/scripts/forge-state.test.mjs   # state-script unit tests alone
 ```
 
 ## When to use forge-master

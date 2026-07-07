@@ -1,6 +1,7 @@
 // validate.mjs — structural acceptance test for the forge-master plugin.
 // Dependency-free Node ESM. Exit 0 = all green, non-zero = failures.
 import { readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 let failures = 0;
 const fail = (m) => { console.error('FAIL: ' + m); failures++; };
@@ -91,6 +92,7 @@ const SKILLS = [
       '## Attended mode', 'references/tdd.md', 'references/code-review.md', 'test-after',
       'on_complete', '[plan-stale]', 'plan assumption broken', '## Finish stage',
       'dispatch.md', 'inline execution', 'subagent-driven', 'debugging.md', 'parallel.md',
+      'forge-state.mjs', 'blocked-upstream', '/goal', '/loop',
     ],
   },
 ];
@@ -141,6 +143,20 @@ for (const s of SKILLS) {
   }
   for (const m of s.markers) {
     if (!text.includes(m)) fail(`${s.path}: missing required marker "${m}"`);
+  }
+}
+
+// 2c. State script: exists and its unit tests pass (deterministic todo.md bookkeeping).
+const STATE = 'skills/forge-run/scripts/forge-state.mjs';
+const STATE_TEST = 'skills/forge-run/scripts/forge-state.test.mjs';
+if (!existsSync(STATE)) fail(STATE + ' missing');
+if (!existsSync(STATE_TEST)) fail(STATE_TEST + ' missing');
+if (existsSync(STATE) && existsSync(STATE_TEST)) {
+  try {
+    execFileSync(process.execPath, ['--test', STATE_TEST], { stdio: 'pipe' });
+    ok(`${STATE} unit tests pass`);
+  } catch (e) {
+    fail(`${STATE} unit tests failed — run: node --test ${STATE_TEST}`);
   }
 }
 
