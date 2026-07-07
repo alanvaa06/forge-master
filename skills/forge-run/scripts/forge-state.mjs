@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 // forge-state — deterministic todo.md state machine for forge-master runs.
-// Owns the canonical entry format:  - [status] plan-NNN P<n>: <name>
+// Owns the canonical entry format:  - [status] plan-NNN P<n>: <name> [{tier=… process=…}]
 //
 // Usage:
-//   node forge-state.mjs seed   <plan-file> [--todo <path>]
-//   node forge-state.mjs next   <plan-file> [--all] [--todo <path>]
-//   node forge-state.mjs set    <plan-file> <P-id> <status> [--todo <path>]
-//   node forge-state.mjs status <plan-file> [--todo <path>]
+//   node forge-state.mjs seed     <plan-file> [--todo <path>]
+//   node forge-state.mjs next     <plan-file> [--all] [--todo <path>]
+//   node forge-state.mjs set      <plan-file> <P-id> <status> [--todo <path>]
+//   node forge-state.mjs escalate <plan-file> <P-id> [--tier senior] [--process heavy] [--todo <path>]
+//   node forge-state.mjs status   <plan-file> [--todo <path>]
+//
+// `escalate` persists the runtime tier/process bump onto the entry line so a
+// resumed run re-reads the escalated tags instead of the original plan tags;
+// `next` merges that suffix over the plan and echoes it as `escalated`.
 //
 // All commands print JSON to stdout. Errors go to stderr with exit code 1.
 // `set blocked|plan-stale` cascades [blocked-upstream] to every pending
@@ -18,7 +23,13 @@ import { basename } from 'node:path';
 const NON_TERMINAL = ['pending', 'in_progress', 'in_progress-parallel'];
 const TERMINAL = ['done', 'blocked', 'blocked-upstream', 'plan-stale'];
 const STATUSES = [...NON_TERMINAL, ...TERMINAL];
-const ENTRY_RE = /^- \[([a-z_-]+)\] (plan-\S+) (P\d+): (.*)$/;
+const TIERS = ['junior', 'senior'];
+const PROCESSES = ['light', 'heavy'];
+// Canonical entry, with an OPTIONAL trailing escalation suffix persisted at runtime:
+//   - [status] plan-NNN P<n>: <name> {tier=senior process=heavy}
+// Group 4 is the phase name (non-greedy so it never eats the braces); group 5 is
+// the raw override body when present. next merges group 5 over the plan's tags.
+const ENTRY_RE = /^- \[([a-z_-]+)\] (plan-\S+) (P\d+): (.*?)(?:\s+\{([^}]*)\})?$/;
 
 function fail(msg) {
   process.stderr.write(`forge-state: ${msg}\n`);
@@ -30,9 +41,31 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--todo') args.todo = argv[++i];
     else if (argv[i] === '--all') args.all = true;
+    else if (argv[i] === '--tier') args.tier = argv[++i];
+    else if (argv[i] === '--process') args.process = argv[++i];
     else args.rest.push(argv[i]);
   }
   return args;
+}
+
+// Escalation suffix helpers. Only tier/process are recognised; order is fixed so
+// the persisted line is deterministic regardless of the bump order.
+function parseOverride(raw) {
+  if (!raw) return null;
+  const o = {};
+  for (const tok of raw.trim().split(/\s+/)) {
+    const [k, v] = tok.split('=');
+    if (k && v) o[k] = v;
+  }
+  return Object.keys(o).length ? o : null;
+}
+
+function formatOverride(o) {
+  if (!o) return '';
+  const parts = [];
+  if (o.tier) parts.push(`tier=${o.tier}`);
+  if (o.process) parts.push(`process=${o.process}`);
+  return parts.length ? ` {${parts.join(' ')}}` : '';
 }
 
 function parsePlan(planPath) {
@@ -70,20 +103,32 @@ function parseEntries(todoText, planId) {
   const entries = new Map();
   for (const line of todoText.split(/\r?\n/)) {
     const m = line.match(ENTRY_RE);
-    if (m && m[2] === planId) entries.set(m[3], { status: m[1], name: m[4] });
+    if (m && m[2] === planId)
+      entries.set(m[3], { status: m[1], name: m[4], override: parseOverride(m[5]) });
   }
   return entries;
 }
 
-function writeEntryStatus(todoPath, planId, phaseId, status) {
+// Rewrite one matched entry line; `fn` receives its current
+// {status, name, override} and returns the next one. Whichever field it does not
+// change is carried over verbatim, so a status flush keeps the escalation suffix
+// and an escalation flush keeps the status.
+function rewriteEntry(todoPath, planId, phaseId, fn) {
   const lines = readTodo(todoPath).split(/\r?\n/);
   const out = lines.map(line => {
     const m = line.match(ENTRY_RE);
-    if (m && m[2] === planId && m[3] === phaseId)
-      return `- [${status}] ${planId} ${phaseId}: ${m[4]}`;
+    if (m && m[2] === planId && m[3] === phaseId) {
+      const cur = { status: m[1], name: m[4], override: parseOverride(m[5]) };
+      const next = fn(cur);
+      return `- [${next.status}] ${planId} ${phaseId}: ${next.name}${formatOverride(next.override)}`;
+    }
     return line;
   });
   writeFileSync(todoPath, out.join('\n'));
+}
+
+function writeEntryStatus(todoPath, planId, phaseId, status) {
+  rewriteEntry(todoPath, planId, phaseId, cur => ({ ...cur, status }));
 }
 
 // transitive dependents of rootId over the plan graph
@@ -113,9 +158,18 @@ function allTerminal(entries) {
   return [...entries.values()].every(e => TERMINAL.includes(e.status));
 }
 
-const { rest, todo, all } = parseArgs(process.argv.slice(2));
+// Merge an entry's persisted escalation over the plan's static tags. The result
+// is what a resumed run must execute — escalated tags win, un-escalated axes fall
+// back to the plan. `escalated` echoes only what was overridden.
+function withEscalation(phase, entries) {
+  const o = entries.get(phase.id)?.override;
+  if (!o) return phase;
+  return { ...phase, ...o, escalated: o };
+}
+
+const { rest, todo, all, tier, process: procTag } = parseArgs(process.argv.slice(2));
 const [cmd, planPath, ...cmdArgs] = rest;
-if (!cmd || !planPath) fail('usage: forge-state.mjs <seed|next|set|status> <plan-file> [args] [--todo <path>]');
+if (!cmd || !planPath) fail('usage: forge-state.mjs <seed|next|set|escalate|status> <plan-file> [args] [--todo <path>]');
 const todoPath = todo ?? 'docs/context/todo.md';
 const { planId, phases } = parsePlan(planPath);
 const print = obj => process.stdout.write(JSON.stringify(obj, null, 2) + '\n');
@@ -134,7 +188,7 @@ if (cmd === 'seed') {
 } else if (cmd === 'next') {
   const entries = parseEntries(readTodo(todoPath), planId);
   if (entries.size === 0) fail(`no ${planId} entries in ${todoPath} — run seed first`);
-  const ready = executable(phases, entries);
+  const ready = executable(phases, entries).map(p => withEscalation(p, entries));
   if (all) {
     print({ plan: planId, phases: ready, all_terminal: allTerminal(entries) });
   } else if (ready.length > 0) {
@@ -166,6 +220,26 @@ if (cmd === 'seed') {
     }
   }
   print({ plan: planId, phase: phaseId, status, cascaded_blocked_upstream: cascaded });
+} else if (cmd === 'escalate') {
+  const [phaseId] = cmdArgs;
+  if (!phaseId) fail('usage: forge-state.mjs escalate <plan-file> <P-id> [--tier senior] [--process heavy]');
+  if (tier === undefined && procTag === undefined)
+    fail('escalate needs at least one of --tier / --process');
+  if (tier !== undefined && !TIERS.includes(tier))
+    fail(`invalid tier "${tier}" — one of: ${TIERS.join(', ')}`);
+  if (procTag !== undefined && !PROCESSES.includes(procTag))
+    fail(`invalid process "${procTag}" — one of: ${PROCESSES.join(', ')}`);
+  const entries = parseEntries(readTodo(todoPath), planId);
+  if (!entries.has(phaseId)) fail(`no entry for ${planId} ${phaseId} in ${todoPath}`);
+  const add = {};
+  if (tier !== undefined) add.tier = tier;
+  if (procTag !== undefined) add.process = procTag;
+  let merged;
+  rewriteEntry(todoPath, planId, phaseId, cur => {
+    merged = { ...cur.override, ...add };
+    return { ...cur, override: merged };
+  });
+  print({ plan: planId, phase: phaseId, escalated: merged });
 } else if (cmd === 'status') {
   const entries = parseEntries(readTodo(todoPath), planId);
   if (entries.size === 0) fail(`no ${planId} entries in ${todoPath} — run seed first`);

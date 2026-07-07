@@ -186,3 +186,94 @@ test('in_progress-parallel accepted as batch status', () => {
   const out = runJson(['status', planPath]);
   assert.equal(out.all_terminal, false);
 });
+
+// --- escalation persistence ---
+
+test('escalate writes escalated tags suffix onto the entry line', () => {
+  runJson(['seed', planPath]);
+  const out = runJson(['escalate', planPath, 'P1', '--tier', 'senior', '--process', 'heavy']);
+  assert.equal(out.phase, 'P1');
+  assert.deepEqual(out.escalated, { tier: 'senior', process: 'heavy' });
+  assert.match(readFileSync(todoPath, 'utf8'),
+    /- \[pending\] plan-007 P1: setup harness \{tier=senior process=heavy\}/);
+});
+
+test('next returns escalated tags overriding plan tags', () => {
+  runJson(['seed', planPath]);
+  runJson(['escalate', planPath, 'P1', '--tier', 'senior', '--process', 'heavy']);
+  const out = runJson(['next', planPath]);
+  assert.equal(out.phase.id, 'P1');
+  assert.equal(out.phase.tier, 'senior'); // plan says junior
+  assert.equal(out.phase.process, 'heavy'); // plan says light
+  assert.deepEqual(out.phase.escalated, { tier: 'senior', process: 'heavy' });
+});
+
+test('escalate on a single axis leaves the other at its plan tag', () => {
+  runJson(['seed', planPath]);
+  runJson(['escalate', planPath, 'P1', '--tier', 'senior']);
+  const out = runJson(['next', planPath]);
+  assert.equal(out.phase.tier, 'senior'); // overridden
+  assert.equal(out.phase.process, 'light'); // plan default, not overridden
+  assert.deepEqual(out.phase.escalated, { tier: 'senior' });
+});
+
+test('escalate merges successive bumps on the same phase', () => {
+  runJson(['seed', planPath]);
+  runJson(['escalate', planPath, 'P1', '--tier', 'senior']);
+  const out = runJson(['escalate', planPath, 'P1', '--process', 'heavy']);
+  assert.deepEqual(out.escalated, { tier: 'senior', process: 'heavy' });
+  assert.match(readFileSync(todoPath, 'utf8'),
+    /- \[pending\] plan-007 P1: setup harness \{tier=senior process=heavy\}/);
+});
+
+test('escalate preserves the current status', () => {
+  runJson(['seed', planPath]);
+  runJson(['set', planPath, 'P1', 'in_progress']);
+  runJson(['escalate', planPath, 'P1', '--tier', 'senior']);
+  assert.match(readFileSync(todoPath, 'utf8'),
+    /- \[in_progress\] plan-007 P1: setup harness \{tier=senior\}/);
+});
+
+test('set status change preserves an existing escalated suffix', () => {
+  runJson(['seed', planPath]);
+  runJson(['escalate', planPath, 'P1', '--tier', 'senior', '--process', 'heavy']);
+  runJson(['set', planPath, 'P1', 'done']);
+  assert.match(readFileSync(todoPath, 'utf8'),
+    /- \[done\] plan-007 P1: setup harness \{tier=senior process=heavy\}/);
+});
+
+test('escalated suffix survives a blocked-upstream cascade on dependents', () => {
+  runJson(['seed', planPath]);
+  runJson(['escalate', planPath, 'P3', '--tier', 'senior']); // downstream of P2
+  runJson(['set', planPath, 'P2', 'blocked']);
+  const todo = readFileSync(todoPath, 'utf8');
+  assert.match(todo, /- \[blocked-upstream\] plan-007 P3: docs \{tier=senior\}/);
+});
+
+test('escalate with no axis flags is rejected', () => {
+  runJson(['seed', planPath]);
+  assert.throws(() => run(['escalate', planPath, 'P1'], { stdio: 'pipe' }));
+});
+
+test('escalate with invalid tier is rejected', () => {
+  runJson(['seed', planPath]);
+  assert.throws(() => run(['escalate', planPath, 'P1', '--tier', 'wizard'], { stdio: 'pipe' }));
+});
+
+test('escalate with invalid process is rejected', () => {
+  runJson(['seed', planPath]);
+  assert.throws(() => run(['escalate', planPath, 'P1', '--process', 'medium'], { stdio: 'pipe' }));
+});
+
+test('escalate on unknown phase is rejected', () => {
+  runJson(['seed', planPath]);
+  assert.throws(() => run(['escalate', planPath, 'P9', '--tier', 'senior'], { stdio: 'pipe' }));
+});
+
+test('escalated entries round-trip through status counts', () => {
+  runJson(['seed', planPath]);
+  runJson(['escalate', planPath, 'P1', '--tier', 'senior', '--process', 'heavy']);
+  const out = runJson(['status', planPath]);
+  assert.equal(out.total, 4);
+  assert.equal(out.counts.pending, 4);
+});
