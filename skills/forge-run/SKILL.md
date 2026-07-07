@@ -94,6 +94,11 @@ No other pause points exist; attended mode does not turn the loop conversational
 ## State discipline
 **After EVERY phase, flush full state to disk** (todo, results, lessons, the commit). Compaction or a crash loses at most the in-flight phase. **Resume = re-invoke `/forge-master:run`** — INIT detects the partial `todo.md` and continues. Multi-session for free.
 
+## Keeping the loop alive (harness-enforced, optional)
+The stop condition ("all phases terminal") lives in this skill's prose — the harness does not enforce it. Two user-invoked primitives harden an autonomous run. Suggest them ONCE, in the status line right before phase 1 of a fresh autonomous run (never mid-run, never on resume, never in attended mode):
+- **Premature-stop guard:** `/goal every phase in docs/context/todo.md is terminal (done/blocked/blocked-upstream/plan-stale) and the final report is written` — an evaluator model bounces any early stop back into the loop instead of trusting prose discipline.
+- **Unattended auto-resume:** `/loop 30m /forge-master:run` — INIT's resume detection is idempotent, so a timer turns disk-backed resumability into self-resume after a crash or compaction. The user cancels the loop when the final report lands.
+
 ## END
 1. All phases terminal -> walk the PRD **Definition of Done** checklist. Verify any `[manual-check]` ACs here (they never blocked the loop).
 2. Write the **final report**: phases done / blocked / `[plan-stale]` / pending, tokens spent, escalations, key lessons — and, if any phase is `[plan-stale]`, the recommendation to re-run `plan-design` on the remainder.
@@ -103,7 +108,7 @@ No other pause points exist; attended mode does not turn the loop conversational
 
 ## Finish stage — land the branch
 Execute ONLY when the full repo suite is green on the run branch. `on_complete` comes frozen from Run Config; in attended mode confirm the action with the user first, in autonomous mode execute the config without asking:
-- **`pr`** (default) -> push the run branch and open a PR against the base branch; the PR body is generated from the final report (phases, AC IDs satisfied, escalations, lessons).
+- **`pr`** (default) -> push the run branch and open a PR against the base branch; the PR body is generated from the final report (phases, AC IDs satisfied, escalations, lessons). The run ends at the PR but the PR keeps living — reviews and CI arrive later — so close the final report with the handoff command: `/loop 30m check PR <url>: address new review comments and fix failing CI`.
 - **`merge`** -> merge the run branch into the base branch and delete the run branch. Never merge with blocked/`[plan-stale]` phases outstanding — fall back to `pr` and explain why in the report.
 - **`keep`** -> leave the branch as-is and state in the report exactly where the work lives and how to land it later.
 If the suite is not green (blocked phases remain), do not land anything: `keep` behavior, report states why.

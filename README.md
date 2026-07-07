@@ -62,6 +62,8 @@ Each command is independently invocable — or use `forge` to chain them all: it
 
 Interrupted? Compacted? Crashed? Just re-invoke `/forge-master:run` — state lives on disk, INIT detects the partial run and resumes. At most the in-flight phase is lost.
 
+Fully unattended? Two harness primitives harden the loop beyond prose discipline: wrap the run in `/goal` ("every phase in todo.md terminal and final report written") so an evaluator model bounces premature stops back into the loop, and `/loop 30m /forge-master:run` to auto-resume after a crash or compaction — INIT's resume detection makes re-invocation idempotent. And when `on_complete: pr`, the final report ends with a handoff command (`/loop 30m check PR ...: address reviews, fix CI`) — the run ends at the PR, but reviews and CI don't.
+
 ## How it works
 
 **Decompose.** Every PRD acceptance criterion is Given/When/Then and verifiable by a test or command. `plan-design` maps each AC to exactly one phase (orphan AC = invalid plan) over an acyclic dependency graph.
