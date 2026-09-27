@@ -77,7 +77,7 @@ const SKILLS = [
   {
     path: 'skills/plan-design/SKILL.md',
     name: 'plan-design',
-    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md', 'Parallel Groups', 'budget'],
+    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md', 'Parallel Groups', 'budget', 'forge-state.mjs" lint', 'P0: setup test harness'],
   },
   {
     path: 'skills/budget/SKILL.md',
@@ -93,6 +93,7 @@ const SKILLS = [
       'on_complete', '[plan-stale]', 'plan assumption broken', '## Finish stage',
       'dispatch.md', 'inline execution', 'subagent-driven', 'debugging.md', 'parallel.md',
       'forge-state.mjs', 'blocked-upstream', '/goal', '/loop',
+      'forge-state.mjs" lint', 'forge-state recover', 'forge-state red', 'docs/forge/runs/', 'stalled', 'sesion-log.md',
     ],
   },
 ];
@@ -146,7 +147,7 @@ for (const s of SKILLS) {
   }
 }
 
-// 2c. State script: exists and its unit tests pass (deterministic todo.md bookkeeping).
+// 2c. State script: exists and its unit tests pass (deterministic run-state bookkeeping).
 const STATE = 'skills/forge-run/scripts/forge-state.mjs';
 const STATE_TEST = 'skills/forge-run/scripts/forge-state.test.mjs';
 if (!existsSync(STATE)) fail(STATE + ' missing');

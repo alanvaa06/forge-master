@@ -61,15 +61,15 @@ Each command is independently invocable — or use `forge` to chain them all: it
                                      #   commits per phase, never asks mid-run
 ```
 
-Interrupted? Compacted? Crashed? Just re-invoke `/forge-master:run` — state lives on disk, INIT detects the partial run and resumes. At most the in-flight phase is lost.
+Interrupted? Compacted? Crashed? Just re-invoke `/forge-master:run` — state lives on disk, INIT detects the partial run and resumes. A phase that was in flight when the session died is recovered: its partial diff is stashed (never discarded) and the phase re-runs from a clean tree with its escalations and red-iteration count intact.
 
-Fully unattended? Two harness primitives harden the loop beyond prose discipline: wrap the run in `/goal` ("every phase in todo.md terminal and final report written") so an evaluator model bounces premature stops back into the loop, and `/loop 30m /forge-master:run` to auto-resume after a crash or compaction — INIT's resume detection makes re-invocation idempotent. And when `on_complete: pr`, the final report ends with a handoff command (`/loop 30m check PR ...: address reviews, fix CI`) — the run ends at the PR, but reviews and CI don't.
+Fully unattended? Two harness primitives harden the loop beyond prose discipline: wrap the run in `/goal` ("every phase in the run state file terminal and final report written") so an evaluator model bounces premature stops back into the loop, and `/loop 30m /forge-master:run` to auto-resume after a crash or compaction — INIT's resume detection makes re-invocation idempotent. And when `on_complete: pr`, the final report ends with a handoff command (`/loop 30m check PR ...: address reviews, fix CI`) — the run ends at the PR, but reviews and CI don't.
 
 ## How it works
 
-**Decompose.** Every PRD acceptance criterion is Given/When/Then and verifiable by a test or command. `plan-design` maps each AC to exactly one phase (orphan AC = invalid plan) over an acyclic dependency graph.
+**Decompose.** Every PRD acceptance criterion is Given/When/Then and verifiable by a test or command. `plan-design` maps each AC to exactly one phase (orphan AC = invalid plan) over an acyclic dependency graph — and proves it with `forge-state lint`, not by eyeballing: unknown or cyclic dependencies, missing fields, orphan or double-covered ACs, and dependent members of a parallel group all fail the lint, and `run` refuses to seed a plan that fails it. A repo with no test runner gets an explicit `P0: setup test harness` phase in the plan, approved at gate 2 like any other.
 
-**Triage.** Phases start optimistic (`junior`/`light`) and escalate UP only — `junior→senior`, then `light→heavy` — by deterministic rules over signals the loop already observes (K consecutive red iterations, stuck subagent, budget exhausted). No triage agent, zero extra tokens. Every escalation is logged to `lessons.md` and improves the next plan's tags.
+**Triage.** Phases start optimistic (`junior`/`light`) and escalate UP only — `junior→senior`, then `light→heavy` — by deterministic rules over signals the loop already observes (K consecutive red iterations, stuck subagent, budget exhausted). The K rule is executed, not reasoned: `forge-state red` persists each red iteration and returns `retry`, `escalate` (with the bump), or `block`, so the count survives compaction. No triage agent, zero extra tokens. Every escalation is logged to `lessons.md` and improves the next plan's tags.
 
 | tag | meaning |
 |---|---|
@@ -94,18 +94,19 @@ The two tags are two execution patterns: light = **inline execution** by the orc
 
 **Finish stage.** When the suite is green, the run lands its branch per `on_complete`: `pr` (default — push + PR generated from the final report), `merge` (merge + delete branch), or `keep`. A run with blocked or plan-stale phases never merges. Phase subagents can also report "plan assumption broken" — the phase is marked `[plan-stale]`, skips escalation, and the final report recommends re-running `plan-design` on the remainder instead of executing a stale plan to exhaustion.
 
-**Persist.** Two homes, by lifetime. The human-approved **artifacts** live under `docs/forge/` (versioned design contracts, one set per initiative); the loop's mutable **state** flushes to `docs/context/` after every phase (the `scaffold` skill's shared project-memory system, which forge-master integrates with rather than owns).
+**Persist.** The human-approved **artifacts** and the run's phase **state** live under `docs/forge/`, which forge-master owns; the loop's learning notes flush to `docs/context/` after every phase (the `scaffold` skill's shared project-memory system, which forge-master integrates with rather than owns). Phase state stays out of scaffold's `todo.md` on purpose: scaffold's `/compact-context` deletes finished todos, which would deadlock or re-run a plan — so `todo.md` only carries a one-line pointer while a run is open, and `forge-state` removes it when the run finishes.
 
 | location | file | role |
 |---|---|---|
 | `docs/forge/prd/` | `NNN-name.md` | the PRD — testable acceptance criteria |
 | `docs/forge/specs/` | `spec-NNN.md` | technical design reference (optional; phases cite its sections) |
 | `docs/forge/plans/` | `plan-NNN.md` | frozen execution contract |
-| `docs/context/` | `todo.md` | phase status: pending / in_progress / done / blocked |
+| `docs/forge/runs/` | `plan-NNN.state.md` | phase status (pending / in_progress / done / blocked / ...), persisted escalations and red-iteration counts; written only by `forge-state` |
+| `docs/context/` | `todo.md` | one pointer line to the run state while a run is open |
 | `docs/context/` | `results.md` | 1-4 line outcome per phase, blockers |
 | `docs/context/` | `lessons.md` | friction events only — escalations, blockers, corrections |
 | `docs/context/` | `memory.md` | one-line architecture decisions |
-| `docs/context/` | `session-log.md` | one line per session |
+| `docs/context/` | `sesion-log.md` | one line per session (scaffold's file name) |
 
 **Learn.** Friction events write lessons consumed by the next `plan-design` (better triage over time). First-pass-green phases write nothing — if everything is a lesson, nothing is.
 
@@ -118,7 +119,8 @@ A phase that stays red at `senior`+`heavy` after K iterations is marked `[blocke
 ## Requirements
 
 - A scaffolded workspace (`docs/context/`, `docs/forge/prd/`) — `run` checks and runs the `scaffold` skill if missing.
-- A repo test framework — or `run` inserts an implicit P0 "setup test harness" phase first.
+- A repo test framework — or `plan-design` writes a `P0: setup test harness` phase into the plan.
+- Node.js on PATH, for the `forge-state` script (zero dependencies).
 
 ## Layout
 
@@ -140,6 +142,9 @@ skills/
     dispatch.md                # dispatch protocol — subagent inputs, report contract, freshness
     debugging.md               # systematic debugging — hypothesis discipline per red iteration
     parallel.md                # worktree fan-out — plan-frozen parallel groups, sequential integration
+  forge-run/scripts/
+    forge-state.mjs            # run-state machine: lint, seed, next, set, red, escalate, recover, status
+    forge-state.test.mjs       # its unit tests (node --test)
 templates/
   plan-template.md             # plan contract skeleton
   spec-template.md             # spec skeleton
@@ -149,7 +154,8 @@ docs/
     prd/NNN-name.md            #   the PRD
     specs/spec-NNN.md          #   the technical design (optional)
     plans/plan-NNN.md          #   the frozen execution contract
-  context/                     # scaffold's shared memory: todo, results, lessons, memory, session-log
+    runs/plan-NNN.state.md     #   run state, owned by forge-state
+  context/                     # scaffold's shared memory: todo (pointer only), results, lessons, memory, sesion-log
   forge-master-design.md       # full design rationale
 ```
 

@@ -2,7 +2,7 @@
 
 Loaded by `forge-run` for every red iteration. Followed by whoever owns the fix (the orchestrator on light phases, the implementer subagent on heavy phases) BEFORE any retry. Blind retries are forbidden — a retry without a diagnosis is spinning, not learning.
 
-## The protocol (before iter++ and retry)
+## The protocol (every red iteration, before the retry)
 
 1. **Read the full error.** Complete stack trace and test output, not a summary. The answer is usually in the part that gets skipped.
 2. **Form ONE falsifiable root-cause hypothesis.** "The test fails because X" — specific enough that evidence can kill it.

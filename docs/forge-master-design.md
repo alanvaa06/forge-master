@@ -1,7 +1,14 @@
 # forge-master — Design Spec
 
+> **Historical (v0.1 design, 2026-06-11).** Kept for rationale. Several details have since changed, so for current behavior read `README.md` and the skills themselves:
+> - run state lives in `docs/forge/runs/plan-NNN.state.md`, owned by `forge-state.mjs`, not in `docs/context/todo.md`;
+> - artifacts live under `docs/forge/{prd,specs,plans}`;
+> - worktree parallelism shipped (Parallel Groups);
+> - P0 is written into the plan by `plan-design`, never improvised by `run`;
+> - the session log is scaffold's `sesion-log.md`.
+
 **Date:** 2026-06-11
-**Status:** Draft for review
+**Status:** Historical, superseded in the places listed above
 **Author:** Claude (brainstormed with Alan Vazquez)
 
 ---

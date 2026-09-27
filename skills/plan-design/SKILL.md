@@ -22,6 +22,7 @@ Produce `docs/forge/plans/plan-NNN.md` from `docs/forge/prd/NNN-name.md`. After 
 - Read `templates/plan-template.md` (from this plugin) as the output skeleton.
 
 ## Step 2 — Decompose into phases
+- **Test harness first.** Detect the repo's test runner (package.json test script, pytest/pyproject, go test, cargo, etc.). If there is none, the plan's first phase is `### P0: setup test harness` (`covers: -`, `depends_on: -`, `tier: junior`, `process: light`, notes naming the runner you chose and why), and every phase without other dependencies gets `depends_on: P0`. P0 is written HERE so it passes gate 2 like every other phase; `run` never improvises one.
 - Group the PRD's ACs into phases (`P1`, `P2`, ...). Each phase is an independently committable, independently verifiable unit of work.
 - For each phase set:
   - **covers:** the AC IDs it satisfies.
@@ -46,7 +47,12 @@ Fill `Run Config`: mode (default `autonomous`), `branch: forge/NNN-<slug>`, `iso
 For a large or heavy plan, optionally hand off to the `budget` skill (`/forge-master:budget`) BEFORE gate 2 — it produces a per-phase token matrix and fills `phase_budget` / `run_budget` with principled numbers instead of heuristics, and flags any phase whose cost contradicts its tag. Optional; skip it for small plans.
 
 ## Step 5 — Write the file
-Write `docs/forge/plans/plan-NNN.md` (create `docs/forge/plans/` if it does not exist) by filling `templates/plan-template.md` completely — no `<...>` placeholders left.
+Write `docs/forge/plans/plan-NNN.md` (create `docs/forge/plans/` if it does not exist) by filling `templates/plan-template.md` completely — no `<...>` placeholders left. Keep each field as a plain `- key: value` line (no bold, no nesting), and write "no dependencies" as `-`.
+
+## Step 5.5 — Lint (the coverage proof, executed)
+Run `node "${CLAUDE_PLUGIN_ROOT}/skills/forge-run/scripts/forge-state.mjs" lint docs/forge/plans/plan-NNN.md --prd docs/forge/prd/NNN-name.md`. It checks by code what Step 3 checked by reading: required fields present, valid tier/process tags, every `depends_on` names a real phase, no dependency cycle, every PRD AC covered by exactly one phase, no covered AC missing from the PRD, Parallel Groups whose members are known and mutually independent, and `max_parallel` > 1 only with groups. File-disjointness stays your judgment (Step 3.5).
+- `ok: false` → fix the plan and re-run until `ok: true`. **A plan that fails lint is never presented at gate 2**; `run` INIT would stop on it anyway.
+- `warnings` don't block, but name each one in Block B. A phase that covers no AC (like P0) is expected. Parallel-group problems while `max_parallel` is 1 usually mean the template's example group line was left in: delete the `## Parallel Groups` section unless you declared groups.
 
 ## Step 6 — Human gate 2
 Present TWO blocks, then gate.
@@ -75,7 +81,7 @@ Mark logic:
 - **max_parallel** — `✓` at 1 · `✓ groups file-disjoint` if >1 WITH `## Parallel Groups` · `⛔ no Parallel Groups` if >1 WITHOUT.
 
 ### Block B — the plan
-Then present: the phase list, each phase's tier/process tags WITH the reasoning (and any lesson that drove a non-default tag), the total-coverage table, and — when declared — the Parallel Groups with their file-disjointness reasoning (the human approves parallelism as part of the frozen contract).
+Then present: the lint result (`ok: true`, plus any warnings), the phase list, each phase's tier/process tags WITH the reasoning (and any lesson that drove a non-default tag), the total-coverage table, and — when declared — the Parallel Groups with their file-disjointness reasoning (the human approves parallelism as part of the frozen contract).
 
 ### The gate
 Ask as a lettered list:
