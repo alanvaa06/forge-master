@@ -13,7 +13,7 @@ Before starting from scratch, list what already exists and ask the user where to
 - `docs/forge/prd/NNN-*.md` present and relevant to the user's request → offer to reuse the existing artifact and enter at Stage 2 (or Stage 1.5) instead of redoing the PRD. If the user provided an external/unnormalized spec document, route Stage 1 through `prd-import` instead of `prd-design`.
 - `docs/forge/specs/spec-NNN.md` present for that PRD → offer to enter at Stage 2.
 - `docs/forge/plans/plan-NNN.md` present and approved → offer to enter at Stage 3.
-- Partial `todo.md` for that plan → this is a resume; go straight to Stage 3 (`run` INIT handles resume detection).
+- Partial run state for that plan (`docs/forge/runs/plan-NNN.state.md` with non-terminal entries, or plan entries a pre-0.17 run left in `docs/context/todo.md`) → this is a resume; go straight to Stage 3 (`run` INIT handles resume detection). Under worktree isolation the state lives in the run worktree: check `git worktree list` for `../<repo-dirname>-forge-NNN`.
 
 Present the entry point as a lettered list of only the stages that apply given what you found, mark one **Recommended** with a concrete why (the furthest-along stage matching the request — reusing approved artifacts beats redoing them), and let the user pick by letter. Never assume the entry stage. Example:
 > Found `docs/forge/prd/002-billing.md` (approved) and `spec-002.md`. Enter at:

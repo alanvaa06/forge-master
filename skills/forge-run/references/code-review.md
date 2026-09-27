@@ -26,7 +26,7 @@ Never the run history. The reviewer is INDEPENDENT: a fresh subagent that did no
 
 ## Routing (deterministic)
 
-- **Blockers** → the finding goes back to the implementation cycle; the phase re-enters implement->verify and `iter` increments — review failures feed the SAME K/escalation machinery as red tests. Fix, re-verify, re-review the fixed area.
+- **Blockers** → the finding goes back to the implementation cycle; the phase re-enters implement->verify and `iter` increments (`forge-state red`, same as a red test) — review failures feed the SAME K/escalation machinery as red tests. Fix, re-verify, re-review the fixed area.
 - **Nits** → logged to `results.md` with the phase entry; NEVER block the commit and never increment `iter`.
 - **Feedback is verified against the code before being implemented, not applied blindly.** If the implementer can show the reviewer's claim is factually wrong (test exists, interface does match), record the disagreement in `results.md` and proceed — the test runner, not the reviewer, has final authority on green.
 - Before acting, the implementer classifies EVERY finding as exactly one of: **correct** (act on it), **incorrect-with-evidence** (rebut: cite the test, line, or interface that disproves it; record the disagreement in `results.md` and proceed), or **unverifiable** (cannot be confirmed either way: treat a blocker as correct — fix it; drop a nit). Silent agreement and silent dismissal are both violations.

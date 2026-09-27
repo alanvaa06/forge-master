@@ -18,8 +18,18 @@ You are the orchestrator. You ORCHESTRATE and VERIFY. You implement ONLY light p
    - **`in-place`:** `git checkout -b forge/NNN-<slug>` in the current dir. This moves the shared working dir onto the run branch, so any concurrent session or open editor collides. Use ONLY when this is the sole session on the repo; if `git worktree list` or recent commits on another branch suggest other live work, warn the user and switch to `worktree`.
    - From here, **the run root** = wherever you just landed. Every read, write, commit, and phase worktree below happens there.
 3. **Scaffold check.** In the run root, verify `docs/context/` exists. If missing, run the user's `scaffold` skill first, then continue.
-4. **Resume detection.** In the run root, run `node <skill-dir>/scripts/forge-state.mjs seed docs/forge/plans/plan-NNN.md` — idempotent: it seeds one `[pending]` entry per phase, or reports `resume: true` when this plan's entries already exist (you are RESUMING; `next` picks up at the first executable phase). Then read `docs/context/lessons.md`. Fallback — node missing, or `todo.md` holds this plan's entries in a pre-script format — do the same by hand per the State discipline rules.
-5. **Test harness check:** detect the repo's test framework. If none exists, insert an implicit phase **P0: setup test harness** and run it first — nothing can be verified without a runner.
+4. **Lint the contract.** Run `node "${CLAUDE_PLUGIN_ROOT}/skills/forge-run/scripts/forge-state.mjs" lint docs/forge/plans/plan-NNN.md --prd docs/forge/prd/NNN-name.md`. Do NOT repair the frozen plan yourself.
+   - **Fresh run** (no run state for this plan yet): `ok: false` means the plan is invalid, e.g. an unknown or cyclic dependency, a missing field, an orphan or double-covered AC, or a bad parallel group. Stop cleanly, report the lint errors verbatim, and recommend re-running `plan-design`.
+   - **Resume** (a state file, or pre-0.17 entries in `docs/context/todo.md`, already exists): only `graph_errors` stop the run. `seed` refuses those too, because they break the state machine. Record any other errors in `results.md` and continue: the plan was approved and seeded under an older lint.
+5. **Test harness check:** detect the repo's test framework. If none exists, the plan must start with a **P0: setup test harness** phase (`plan-design` writes it, so it passed gate 2 like every other phase). If there is no runner AND no P0 in the plan, nothing can be verified: stop cleanly and recommend re-running `plan-design`. Never improvise a phase the frozen contract does not contain.
+6. **Resume detection.** Run `node "${CLAUDE_PLUGIN_ROOT}/skills/forge-run/scripts/forge-state.mjs" seed docs/forge/plans/plan-NNN.md`. It is idempotent: it seeds one `[pending]` entry per phase into `docs/forge/runs/plan-NNN.state.md`, or reports `resume: true` when this plan's entries already exist (you are RESUMING; `next` picks up at the first executable phase). It also migrates entries a pre-0.17 run left in `docs/context/todo.md`; pass `--context-todo <path>` if that run kept todo.md elsewhere. Then read `docs/context/lessons.md`. On a resume, handle the seed output in this order:
+   - **Missing entries** (`missing` non-empty; e.g. a pre-0.17 todo.md that scaffold's `/compact-context` trimmed): reconcile each phase against git on the run branch. If `git log --oneline --grep "^P<n>: "` finds its phase commit, run `forge-state set P<n> done`; otherwise run `forge-state set P<n> pending`. `set` re-creates the entry.
+   - **Crash recovery** (`in_flight` non-empty: a previous session died mid-phase). First make sure no other session is still driving this run. If one might be, for example a manual invocation overlapping a `/loop` timer in another window, stop and report instead of recovering. Then, per in-flight phase:
+     - If `git log --grep "^P<n>: "` shows its phase commit already landed, the crash hit between commit and flush: `forge-state set P<n> done`.
+     - For a parallel-batch phase, run `git worktree list`. If its phase worktree `../<run-root-dirname>-P<n>` still exists, commit anything uncommitted there as `WIP forge-recover P<n>`, remove the worktree, and rename its branch to `forge/NNN-<slug>-P<n>-recovered`. That keeps the salvage and frees the path and branch name for the re-dispatch.
+     - Then run `forge-state recover`: the remaining in-flight phases return to `[pending]` with their escalations and `iter` intact.
+     - Park the dead attempt's partial code in the run root without discarding it. If `git status` shows changes outside forge's own files, run `git stash push -u -m "forge-recover plan-NNN <P-ids>" -- . ":(exclude)docs/forge" ":(exclude)docs/context"` and note the stash in `results.md`. The exclusions matter: the plan, PRD, spec, run state, results, and lessons must stay in the tree even when they were never committed.
+     - Re-run the recovered phases from that clean tree.
 
 ## LOOP — while executable phases remain
 An "executable" phase is `[pending]` with all `depends_on` satisfied (those phases `done`).
@@ -32,14 +42,15 @@ phase = forge-state next <plan>      (first [pending] whose depends_on are all d
 forge-state set <P> in_progress      (FLUSH)
 execute phase per its process/tier (table below)
 verify: run the phase's covered-AC tests AND the full repo test suite
-  green -> git commit "P<n>: <name> [AC-x.y, ...]"
+  green -> git commit "P<n>: <name> [AC-x.y, ...]"   (the phase's code plus docs/forge/runs + docs/context)
            forge-state set <P> done; append 1-4 line results.md entry   (FLUSH)
            -> next phase
-  red   -> iter++
-           if iter >= K and (tier or process not maxed):  ESCALATE
-           if iter >= K and already senior+heavy:          BLOCK
+  red   -> forge-state red <P>          (FLUSH: persists iter, reads K from Run Config)
+           decision: retry    -> diagnose per debugging.md, retry
+                     escalate -> ESCALATE with the returned bump
+                     block    -> BLOCK
 ```
-`forge-state next` returning `phase: null, all_terminal: true` ends the LOOP -> go to END. `phase: null` with non-terminal entries left means only in-flight work remains — finish it; never invent a phase the script did not return.
+`forge-state next` returning `phase: null, all_terminal: true` ends the LOOP -> go to END. `phase: null` with a non-empty `in_flight` means only in-flight work remains (a parallel batch still integrating): finish it. `stalled: true` means the state can never progress; its `waiting` list names the unmet dependencies. If `missing` is non-empty, an entry was deleted outside the script: reconcile it against git exactly as INIT does, then continue. Otherwise stop cleanly and report a state-integrity failure. Never invent a phase the script did not return.
 
 Every red iteration follows `references/debugging.md` (read it and pass it to whoever owns the fix) — no retry without a root-cause hypothesis; a stuck report must include the hypotheses tested.
 
@@ -49,7 +60,7 @@ Every red iteration follows `references/debugging.md` (read it and pass it to wh
 - **junior:** dispatch a cheap-model subagent (haiku/sonnet), low effort.
 - **senior:** dispatch a top-model subagent, high effort.
 
-Review findings route deterministically (full contract in `references/code-review.md`): **blockers** re-enter the implementation cycle and increment `iter` — feeding the same K/escalation machinery as red tests; **nits** go to `results.md` and never block.
+Review findings route deterministically (full contract in `references/code-review.md`): **blockers** re-enter the implementation cycle and count as a red iteration (`forge-state red`, which increments `iter`), feeding the same K/escalation machinery as red tests; **nits** go to `results.md` and never block.
 
 Phase subagents receive MINIMAL context: their plan section, their ACs, relevant lessons, `memory.md`, and — when `docs/forge/specs/spec-NNN.md` exists — only each spec section their phase's `notes:` cite (its Interfaces and File Map rows), never the whole spec. **Never the run history** — your master context stays lean. If implementation reality contradicts a cited spec section, the plan wins; record the divergence in `results.md`. Dispatch protocol, report contract, and freshness policy: `references/dispatch.md`.
 
@@ -57,14 +68,13 @@ Phase subagents receive MINIMAL context: their plan section, their ACs, relevant
 "Green" is decided by the test runner exit code, never by an agent's opinion — this guards against hallucinated progress. **Double anti-regression check:** the phase's covered-AC tests AND the full repo suite must both pass, so a new phase can never silently break a past phase.
 
 ### ESCALATE (deterministic, unidirectional — UP only)
-Trigger when `iter >= K` OR any free signal fires: junior subagent declares stuck/no-progress, files touched far exceed the plan estimate, or `phase_budget` exhausted without green.
-- Bump the weakest axis: `junior -> senior` first, then `light -> heavy`. Never de-escalate.
-- **Flush the bump to disk** so a resume inherits it: `node <skill-dir>/scripts/forge-state.mjs escalate docs/forge/plans/plan-NNN.md P<n> [--tier senior] [--process heavy]`. This persists a `{tier=… process=…}` suffix on the entry; on resume `forge-state next` merges it over the plan tags (echoed as `escalated`) so the phase restarts at the escalated tags, not the original plan tags. Skip this and a post-compaction resume repeats the dead hypotheses at the weaker tier.
-- Reset `iter` to 0.
+Trigger when `forge-state red` returns `decision: escalate` (it carries the `bump`) OR any free signal fires: junior subagent declares stuck/no-progress, files touched far exceed the plan estimate, or `phase_budget` exhausted without green. A free signal escalates early, before K: bump the weakest axis that is not yet maxed. On a phase already senior+heavy there is nothing to bump, so count the signal as a red iteration (`forge-state red`) and follow its decision; only `red` ever decides BLOCK.
+- Bump the weakest axis: `junior -> senior` first, then `light -> heavy`. Never de-escalate (the script refuses a bump that is not strictly UP).
+- **Flush the bump to disk** so a resume inherits it: `node "${CLAUDE_PLUGIN_ROOT}/skills/forge-run/scripts/forge-state.mjs" escalate docs/forge/plans/plan-NNN.md P<n> [--tier senior] [--process heavy]`. This persists a `{tier=... process=...}` suffix on the entry and resets its `iter` to 0 (a fresh K window). On resume `forge-state next` merges the suffix over the plan tags (echoed as `escalated`), so the phase restarts at the escalated tags, not the original plan tags. Skip this and a post-compaction resume repeats the dead hypotheses at the weaker tier.
 - Append to `lessons.md`: `P<n> escalated (<from>-><to>): <reason>; dead hypotheses: <list>` — friction event, consumed by future `plan-design`; the dead-hypothesis list is what the fresh retry inherits (see `references/debugging.md`).
 - Retry the phase.
 
-### BLOCK (only when already senior+heavy and still red at K)
+### BLOCK (only when `forge-state red` returns `decision: block`: already senior+heavy and still red at K)
 - Write the blocker to `results.md` and a lesson to `lessons.md`.
 - `forge-state set <P> blocked` — the script cascades `[blocked-upstream]` to every pending transitive dependent; do not mark them by hand.
 - Continue with independent branches of the graph. Never request human input mid-run (autonomous mode).
@@ -95,20 +105,32 @@ A phase subagent may report **"plan assumption broken"** — the plan's premise 
 No other pause points exist; attended mode does not turn the loop conversational.
 
 ## State discipline
-**After EVERY phase, flush full state to disk** (todo, results, lessons, the commit). Compaction or a crash loses at most the in-flight phase. **Resume = re-invoke `/forge-master:run`** — INIT detects the partial `todo.md` and continues. Multi-session for free.
+**After EVERY phase, flush full state to disk** (run state, results, lessons, the commit). Compaction or a crash loses at most the in-flight phase, and INIT's crash recovery re-runs it. **Resume = re-invoke `/forge-master:run`**: INIT detects the partial run state and continues. Multi-session for free.
 
-**Every `todo.md` mutation goes through `scripts/forge-state.mjs`** (zero-dep node, lives next to this skill; canonical line format `- [status] plan-NNN P<n>: <name>`). Full invocation — the plan file is always the first argument: `node <skill-dir>/scripts/forge-state.mjs <seed|next|set|escalate|status> docs/forge/plans/plan-NNN.md [P-id …] [--all]` (add `--todo <path>` only if todo.md is not at `docs/context/todo.md`). Subcommands: `seed` at INIT (idempotent), `next [--all]` for phase selection (merges any persisted escalation over the plan tags — trust `phase.tier`/`phase.process` from its output, not the raw plan), `set <P-id> <status>` for every flush (`blocked`/`plan-stale` cascade `blocked-upstream` automatically), `escalate <P-id> [--tier senior] [--process heavy]` to persist an ESCALATE bump onto the entry, `status` for the terminal check before END. Output is JSON — trust it over re-parsing the markdown yourself; deterministic bookkeeping is cheaper than reasoning and immune to post-compaction misreads. Manual fallback ONLY when node is unavailable or the entries predate the canonical format — then follow the same rules by hand.
+**Run state lives in `docs/forge/runs/plan-NNN.state.md`**, a forge-owned file. It is NOT scaffold's `docs/context/todo.md`: scaffold's `/compact-context` deletes finished todos, which would deadlock or re-run phases. While the run is open, `todo.md` carries exactly one pointer line (`- [ ] [in_progress] forge run plan-NNN -> <state file> (forge-state)`); the script adds it at `seed` and removes it once every phase is terminal. Never edit either by hand.
+
+**Every run-state mutation goes through `scripts/forge-state.mjs`** (zero-dep node; canonical line format `- [status] plan-NNN P<n>: <name> [{tier=.. process=.. iter=N}]`). Full invocation, the plan file always first, the script path always quoted (the plugin root may contain spaces): `node "${CLAUDE_PLUGIN_ROOT}/skills/forge-run/scripts/forge-state.mjs" <cmd> docs/forge/plans/plan-NNN.md [P-id ...] [flags]`. `forge-state <cmd>` below is shorthand for this. Flags: `--state <path>` if the state file is not at `docs/forge/runs/plan-NNN.state.md`; `--context-todo <path>` if scaffold's todo.md is not at `docs/context/todo.md`. Subcommands:
+- `lint [--prd <prd>]`: validates the plan (fields, tags, dependency graph, AC coverage, parallel groups). Exits 1 with the errors in its JSON; `graph_errors` is the state-breaking subset. Run at INIT.
+- `seed`: at INIT. Idempotent, migrates legacy entries, reports `in_flight` after a crash and `missing` for plan phases without an entry.
+- `recover`: returns in-flight phases to `[pending]` (crash recovery, INIT only).
+- `next [--all]`: phase selection. It merges persisted escalations and `iter` over the plan tags, so trust `phase.tier` / `phase.process` from its output, not the raw plan.
+- `set <P-id> <status>`: every status flush. `blocked` / `plan-stale` cascade `blocked-upstream` automatically. Re-creates the entry of a plan phase that has none.
+- `red <P-id>`: every red iteration (test red, review blocker, integration failure). Persists `iter` and returns `decision: retry | escalate | block`.
+- `escalate <P-id> [--tier senior] [--process heavy]`: persists an ESCALATE bump (UP only) and resets `iter`.
+- `status`: the terminal check before END.
+
+Output is JSON; trust it over re-parsing the markdown yourself. Deterministic bookkeeping is cheaper than reasoning and immune to post-compaction misreads. Manual fallback ONLY when node is unavailable; then follow the same rules by hand.
 
 ## Keeping the loop alive (harness-enforced, optional)
 The stop condition ("all phases terminal") lives in this skill's prose — the harness does not enforce it. Two user-invoked primitives harden an autonomous run. Suggest them ONCE, in the status line right before phase 1 of a fresh autonomous run (never mid-run, never on resume, never in attended mode):
-- **Premature-stop guard:** `/goal every phase in docs/context/todo.md is terminal (done/blocked/blocked-upstream/plan-stale) and the final report is written` — an evaluator model bounces any early stop back into the loop instead of trusting prose discipline.
+- **Premature-stop guard:** `/goal every phase in docs/forge/runs/plan-NNN.state.md is terminal (done/blocked/blocked-upstream/plan-stale) and the final report is written` — an evaluator model bounces any early stop back into the loop instead of trusting prose discipline.
 - **Unattended auto-resume:** `/loop 30m /forge-master:run` — INIT's resume detection is idempotent, so a timer turns disk-backed resumability into self-resume after a crash or compaction. The user cancels the loop when the final report lands.
 
 ## END
 1. All phases terminal -> walk the PRD **Definition of Done** checklist. Verify any `[manual-check]` ACs here (they never blocked the loop).
 2. Write the **final report**: phases done / blocked / `[plan-stale]` / pending, tokens spent, escalations, key lessons — and, if any phase is `[plan-stale]`, the recommendation to re-run `plan-design` on the remainder.
-3. Run the **Finish stage** (below).
-4. Append a `session-log.md` line and one-line-per-decision architecture notes to `memory.md`.
+3. Commit the final run state (`docs/forge/runs/`, `docs/context/`) as `forge: run state plan-NNN`. Each phase commit carries the state as it stood before that phase's own `done` flush, so without this commit the branch would land with its last phase still `[in_progress]`. Then run the **Finish stage** (below).
+4. Append one line to scaffold's session log (`docs/context/sesion-log.md`, the name scaffold creates; use `session-log.md` only if that is the file that exists, never create a second log) and one-line-per-decision architecture notes to `memory.md`.
 5. **Clean-stop guarantees:** if `run_budget` is exhausted, stop cleanly with the report at a phase boundary — NEVER mid-phase without a commit. A budget-stop skips the Finish stage (`keep` behavior) and says so. List git worktrees and remove any forge-created leftovers (`git worktree list` / `git worktree remove`) — a finished or stopped run leaves no dangling worktrees or phase branches. Under `isolation: worktree` this includes the run worktree itself once the Finish action has landed the branch (cd to the primary dir first, since you cannot remove the worktree you stand in); for `keep`, leave the run worktree and report its path.
 
 ## Finish stage — land the branch
