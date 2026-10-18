@@ -1,5 +1,5 @@
-- [in_progress] plan-002 P1: plan contract lint + test-suite wiring
-- [pending] plan-002 P2: forge-git helpers + verify
+- [done] plan-002 P1: plan contract lint + test-suite wiring
+- [in_progress] plan-002 P2: forge-git helpers + verify {iter=1}
 - [pending] plan-002 P3: evidence-gated set done
 - [pending] plan-002 P4: reconcile, finish, preflight
 - [pending] plan-002 P5: run lock with heartbeat
