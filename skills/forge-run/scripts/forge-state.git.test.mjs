@@ -535,3 +535,188 @@ test('AC-2.5 a later gated done drops the forced token', () => {
   cliJson(['set', PLAN_PATH, 'P1', 'done']);
   assert.match(stateLine(), /^- \[done\] plan-007 P1: core \{verify=pass:[0-9a-f]{40}\}$/);
 });
+
+// --- AC-3.1: reconcile marks phases done from their P<n>: commits ---
+
+const MULTI = `# Plan-007: demo
+
+## Run Config
+- gates: node -e "process.exit(0)"
+
+## Phases
+
+### P1: one
+- covers: -
+- depends_on: -
+- tier: junior
+- process: light
+
+### P2: two
+- covers: -
+- depends_on: P1
+- tier: junior
+- process: light
+
+### P10: ten
+- covers: -
+- depends_on: -
+- tier: junior
+- process: light
+`;
+const stateText = () => readFileSync(join(repo, STATE_PATH), 'utf8');
+function seedMulti(extraConfig = '') {
+  write(PLAN_PATH, MULTI.replace('## Phases', `${extraConfig}\n## Phases`));
+  cli(['seed', PLAN_PATH]);
+}
+const emptyCommit = msg => git('-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false',
+  '-c', `core.hooksPath=${join(repo, '.git', 'no-hooks')}`, 'commit', '-q', '--allow-empty', '-m', msg);
+
+test('AC-3.1 reconcile marks phases with a P<n>: commit done+reconciled, leaves others', () => {
+  seedMulti();
+  emptyCommit('P1: one');
+  emptyCommit('P10: ten');
+  emptyCommit('unrelated: P2: not a subject start');
+  const r = cliJson(['reconcile', PLAN_PATH]);
+  assert.deepEqual(r, { plan: 'plan-007', reconciled: ['P1', 'P10'], unchanged: ['P2'] });
+  const t = stateText();
+  assert.match(t, /^- \[done\] plan-007 P1: one \{reconciled\}$/m);
+  assert.match(t, /^- \[done\] plan-007 P10: ten \{reconciled\}$/m);
+  assert.match(t, /^- \[pending\] plan-007 P2: two$/m);
+});
+
+test('AC-3.1 P1 commit does not match P10 and done phases are untouched', () => {
+  seedMulti();
+  emptyCommit('P10: ten');
+  const r = cliJson(['reconcile', PLAN_PATH]);
+  assert.deepEqual(r.reconciled, ['P10']);
+  assert.deepEqual(r.unchanged, ['P1', 'P2']);
+  emptyCommit('P2: two');
+  const r2 = cliJson(['reconcile', PLAN_PATH]);
+  assert.deepEqual(r2.reconciled, ['P2']);
+  assert.deepEqual(r2.unchanged, ['P1', 'P10']);
+});
+
+test('AC-3.1 reconcile re-creates a missing entry whose commit exists', () => {
+  seedMulti();
+  writeFileSync(join(repo, STATE_PATH), stateText().split('\n').filter(l => !/ P2: /.test(l)).join('\n'));
+  emptyCommit('P2: two');
+  const r = cliJson(['reconcile', PLAN_PATH]);
+  assert.deepEqual(r.reconciled, ['P2']);
+  assert.match(stateText(), /^- \[done\] plan-007 P2: two \{reconciled\}$/m);
+});
+
+// --- AC-3.2: finish writes an idempotent finished record ---
+
+const FIXED_NOW = '2026-10-18T12:00:00.000Z';
+const cliNow = args => execFileSync(process.execPath, [SCRIPT, ...args, '--state', STATE_PATH], {
+  cwd: repo, env: { ...ENV, FORGE_STATE_NOW: FIXED_NOW }, encoding: 'utf8', stdio: 'pipe' });
+
+test('AC-3.2 finish records action/ref/at; seed and next report finished; second finish exits 1', () => {
+  seedMulti();
+  const r = JSON.parse(cliNow(['finish', PLAN_PATH, '--action', 'pr', '--ref', 'https://x/pull/1']));
+  assert.deepEqual(r, { plan: 'plan-007', finished: { action: 'pr', ref: 'https://x/pull/1', at: FIXED_NOW } });
+  assert.match(stateText(), /^- \[meta\] plan-007 finished: action=pr ref=https:\/\/x\/pull\/1 at=2026-10-18T12:00:00\.000Z$/m);
+  const marker = join(git('rev-parse', '--path-format=absolute', '--git-common-dir'), 'forge', 'plan-007.finished.json');
+  assert.deepEqual(JSON.parse(readFileSync(marker, 'utf8')), { action: 'pr', ref: 'https://x/pull/1', at: FIXED_NOW });
+  const s = cliJson(['seed', PLAN_PATH]);
+  assert.deepEqual(s, { plan: 'plan-007', finished: true, action: 'pr', ref: 'https://x/pull/1', at: FIXED_NOW });
+  const n = cliJson(['next', PLAN_PATH]);
+  assert.equal(n.finished, true);
+  assert.equal(n.action, 'pr');
+  assert.equal(n.ref, 'https://x/pull/1');
+  const again = cliFail(['finish', PLAN_PATH, '--action', 'keep']);
+  assert.equal(again.code, 1);
+  assert.match(again.stderr, /plan-007 already finished \(pr https:\/\/x\/pull\/1 at 2026-10-18T12:00:00\.000Z\)/);
+});
+
+test('AC-3.2 unfinished seed/next print finished: false; marker alone counts; bad action exits 1', () => {
+  seedMulti();
+  assert.equal(cliJson(['seed', PLAN_PATH]).finished, false);
+  assert.equal(cliJson(['next', PLAN_PATH]).finished, false);
+  assert.equal(cliFail(['finish', PLAN_PATH, '--action', 'bogus']).code, 1);
+  assert.equal(cliFail(['finish', PLAN_PATH]).code, 1);
+  cliNow(['finish', PLAN_PATH, '--action', 'keep']);
+  writeFileSync(join(repo, STATE_PATH), stateText().split('\n').filter(l => !/\[meta\]/.test(l)).join('\n'));
+  const s = cliJson(['seed', PLAN_PATH]);
+  assert.equal(s.finished, true);
+  assert.equal(s.action, 'keep');
+});
+
+test('AC-3.2 other commands preserve the meta line', () => {
+  seedMulti();
+  cliNow(['finish', PLAN_PATH, '--action', 'keep']);
+  cli(['set', PLAN_PATH, 'P1', 'in_progress']);
+  cli(['red', PLAN_PATH, 'P1']);
+  assert.match(stateText(), /^- \[meta\] plan-007 finished: action=keep ref= at=/m);
+});
+
+// --- AC-3.5: preflight checks the landing remote ---
+
+test('AC-3.5 preflight fails for on_complete pr|merge without a remote, passes with one', () => {
+  for (const mode of ['pr', 'merge']) {
+    seedMulti(`- on_complete: ${mode}`);
+    const f = cliFail(['preflight', PLAN_PATH]);
+    assert.equal(f.code, 1);
+    const out = JSON.parse(f.stdout);
+    assert.equal(out.ok, false);
+    assert.equal(out.checks.remote, false);
+    assert.ok(out.errors.some(e => e.includes(`on_complete ${mode} needs a git remote`)), out.errors.join());
+  }
+  git('remote', 'add', 'origin', join(tmpdir(), 'forge-nowhere.git'));
+  const ok = cliJson(['preflight', PLAN_PATH]);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.checks.remote, true);
+});
+
+test('AC-3.5 preflight with on_complete keep passes without a remote', () => {
+  seedMulti('- on_complete: keep');
+  const r = cliJson(['preflight', PLAN_PATH]);
+  assert.equal(r.ok, true);
+  assert.equal(r.checks.remote, false);
+});
+
+// --- review fixes ---
+
+test('AC-3.1 reconcile ignores an earlier plan commit with a different phase name', () => {
+  seedMulti();
+  emptyCommit('P1: other name');
+  emptyCommit('P2: twofold');
+  const r = cliJson(['reconcile', PLAN_PATH]);
+  assert.deepEqual(r.reconciled, []);
+  assert.deepEqual(r.unchanged, ['P1', 'P2', 'P10']);
+});
+
+test('AC-3.1 reconcile matches "P<n>: <exact name> [AC-..]" subjects', () => {
+  seedMulti();
+  emptyCommit('P1: one [AC-1.1]');
+  const r = cliJson(['reconcile', PLAN_PATH]);
+  assert.deepEqual(r.reconciled, ['P1']);
+});
+
+test('AC-3.1 gated set done clears the reconciled token', () => {
+  seed();
+  write('src/b.js', 'x\n');
+  commitAll('P1: core');
+  cliJson(['reconcile', PLAN_PATH]);
+  assert.match(stateLine(), /\{reconciled\}$/);
+  cli(['set', PLAN_PATH, 'P1', 'pending']);
+  cliJson(['verify', PLAN_PATH, 'P1']);
+  cli(['set', PLAN_PATH, 'P1', 'done']);
+  assert.match(stateLine(), /^- \[done\] plan-007 P1: core \{verify=pass:[0-9a-f]{40}\}$/);
+});
+
+test('AC-3.5 preflight treats a missing on_complete as pr', () => {
+  seedMulti();
+  const f = cliFail(['preflight', PLAN_PATH]);
+  assert.equal(JSON.parse(f.stdout).ok, false);
+  assert.ok(JSON.parse(f.stdout).errors[0].includes('on_complete pr needs a git remote'));
+});
+
+test('AC-3.2 seed reports finished before linting the plan', () => {
+  seedMulti();
+  cliNow(['finish', PLAN_PATH, '--action', 'keep']);
+  write(PLAN_PATH, MULTI.replace('depends_on: P1', 'depends_on: P99'));
+  const s = cliJson(['seed', PLAN_PATH]);
+  assert.equal(s.finished, true);
+});

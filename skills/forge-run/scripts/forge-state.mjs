@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // forge-state — deterministic run-state machine for forge-master runs.
 // Owns the canonical entry format:
-//   - [status] plan-NNN P<n>: <name> [{tier=.. process=.. iter=N verify=pass|fail:<tree> forced}]
+//   - [status] plan-NNN P<n>: <name> [{tier=.. process=.. iter=N verify=pass|fail:<tree> forced reconciled}]
+//   - [meta] plan-NNN finished: action=<pr|merge|keep> ref=<ref> at=<iso>   (written by `finish`)
 //
 // Usage:
 //   node forge-state.mjs lint     <plan-file> [--prd <prd-file>]
@@ -13,6 +14,9 @@
 //   node forge-state.mjs recover  <plan-file>
 //   node forge-state.mjs status   <plan-file>
 //   node forge-state.mjs verify   <plan-file> <P-id> [--prd <prd-file>] [--gates "<cmd>"]
+//   node forge-state.mjs reconcile <plan-file>
+//   node forge-state.mjs finish   <plan-file> --action pr|merge|keep [--ref <url-or-sha>]
+//   node forge-state.mjs preflight <plan-file>
 // Common flags: --state <path> (alias --todo; default docs/forge/runs/<plan>.state.md),
 //               --context-todo <path> (scaffold's todo.md; default docs/context/todo.md).
 //
@@ -36,8 +40,8 @@
 // `lint` also exits 1 when the plan has errors, listing them in its JSON.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
-import { snapshotWorktree, snapshotHead, diffSnapshots, runGates, findUntestedAcs } from './forge-git.mjs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { snapshotWorktree, snapshotHead, diffSnapshots, runGates, findUntestedAcs, gitCommonDir, phaseCommitList, hasRemote } from './forge-git.mjs';
 
 const NON_TERMINAL = ['pending', 'in_progress', 'in_progress-parallel'];
 const TERMINAL = ['done', 'blocked', 'blocked-upstream', 'plan-stale'];
@@ -81,6 +85,8 @@ function parseArgs(argv) {
     else if (argv[i] === '--process') args.process = argv[++i];
     else if (argv[i] === '--gates') args.gates = argv[++i];
     else if (argv[i] === '--force') args.force = true;
+    else if (argv[i] === '--action') args.action = argv[++i];
+    else if (argv[i] === '--ref') args.ref = argv[++i];
     else if (argv[i] === '--reason') args.reason = argv[++i];
     else args.rest.push(argv[i]);
   }
@@ -340,8 +346,10 @@ function parseSuffix(raw) {
   let iter = 0;
   let verify;
   let forced = false;
+  let reconciled = false;
   for (const tok of raw.trim().split(/\s+/)) {
     if (tok === 'forced') { forced = true; continue; }
+    if (tok === 'reconciled') { reconciled = true; continue; }
     const m = tok.match(/^(tier|process|iter|verify)=(\S+)$/);
     if (!m) return null;
     if (m[1] === 'iter') iter = Number(m[2]) || 0;
@@ -350,7 +358,7 @@ function parseSuffix(raw) {
       verify = m[2];
     } else override[m[1]] = m[2];
   }
-  return { override: Object.keys(override).length ? override : null, iter, ...(verify && { verify }), ...(forced && { forced }) };
+  return { override: Object.keys(override).length ? override : null, iter, ...(verify && { verify }), ...(forced && { forced }), ...(reconciled && { reconciled }) };
 }
 
 // One entry line -> {status, name, override, iter}, or null if not this plan's.
@@ -363,13 +371,14 @@ function parseEntry(line, planId) {
 }
 
 // Fixed order so the persisted line is deterministic regardless of bump order.
-function formatSuffix(override, iter, verify, forced) {
+function formatSuffix(override, iter, verify, forced, reconciled) {
   const parts = [];
   if (override?.tier) parts.push(`tier=${override.tier}`);
   if (override?.process) parts.push(`process=${override.process}`);
   if (iter > 0) parts.push(`iter=${iter}`);
   if (verify) parts.push(`verify=${verify}`);
   if (forced) parts.push('forced');
+  if (reconciled) parts.push('reconciled');
   return parts.length ? ` {${parts.join(' ')}}` : '';
 }
 
@@ -384,7 +393,7 @@ function parseEntries(text, planId) {
 
 const planLines = (text, planId) => text.split(/\r?\n/).filter(l => parseEntry(l, planId));
 const formatEntry = (planId, phaseId, e) =>
-  `- [${e.status}] ${planId} ${phaseId}: ${e.name}${formatSuffix(e.override, e.iter, e.verify, e.forced)}`;
+  `- [${e.status}] ${planId} ${phaseId}: ${e.name}${formatSuffix(e.override, e.iter, e.verify, e.forced, e.reconciled)}`;
 
 // Rewrite one matched entry line; `fn` receives its current
 // {status, name, override, iter, verify, forced} and returns the next one. Whatever it does not
@@ -422,12 +431,40 @@ function effective(phase, entries) {
   return { ...merged, ...e.override, escalated: e.override };
 }
 
+// --- finished record (spec-002 I2/I3, D9/D10): marker in the git common dir + [meta] line ---
+
+const metaRe = id => new RegExp('^- \\[meta\\] ' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' finished: action=(\\S+) ref=(\\S*) at=(\\S+)$');
+const nowIso = () => process.env.FORGE_STATE_NOW || new Date().toISOString();
+
+// Marker path, or null outside a git work tree.
+function markerPath(id) {
+  try { return join(gitCommonDir(process.cwd()), 'forge', id + '.finished.json'); }
+  catch { return null; }
+}
+
+// {action, ref, at} when EITHER the marker file or the meta line says finished.
+function finishedRecord(id, stateText) {
+  const mp = markerPath(id);
+  if (mp && existsSync(mp)) {
+    try {
+      const j = JSON.parse(readFileSync(mp, 'utf8'));
+      if (j && typeof j.action === 'string') return { action: j.action, ref: j.ref ?? '', at: j.at ?? '' };
+    } catch { /* unreadable marker: fall through to the meta line */ }
+  }
+  const re = metaRe(id);
+  for (const line of stateText.split(/\r?\n/)) {
+    const m = line.match(re);
+    if (m) return { action: m[1], ref: m[2], at: m[3] };
+  }
+  return null;
+}
+
 // --- main ---
 
 const args = parseArgs(process.argv.slice(2));
 const [cmd, planPath, ...cmdArgs] = args.rest;
 if (!cmd || !planPath)
-  fail('usage: forge-state.mjs <lint|seed|next|set|red|escalate|recover|status|verify> <plan-file> [args] [--state <path>]');
+  fail('usage: forge-state.mjs <lint|seed|next|set|red|escalate|recover|status|verify|reconcile|finish|preflight> <plan-file> [args] [--state <path>]');
 const plan = parsePlan(planPath);
 const { planId, phases, config, rawConfig } = plan;
 const statePath = args.state ?? `docs/forge/runs/${planId}.state.md`;
@@ -472,6 +509,8 @@ if (cmd === 'lint') {
   process.exit(errors.length ? 1 : 0);
 } else if (cmd === 'seed') {
   // Only state-breaking errors block here; run INIT lints the full contract.
+  const done0 = finishedRecord(planId, readText(statePath));
+  if (done0) { print({ plan: planId, finished: true, ...done0 }); process.exit(0); }
   const { graph } = lint(plan, null);
   if (graph.length) fail(`plan failed lint, nothing seeded: ${graph.join('; ')}`);
   let migrated = 0;
@@ -489,21 +528,23 @@ if (cmd === 'lint') {
     // A re-invocation after the run ended (e.g. /loop) must not reopen the pointer.
     if (finished) dropPointer(); else ensurePointer();
     print({ plan: planId, seeded: 0, resume: true, existing: existing.size, all_terminal: finished,
-      in_flight: inFlight(phases, existing), missing: missing(phases, existing), ...(migrated && { migrated }) });
+      in_flight: inFlight(phases, existing), missing: missing(phases, existing), finished: false, ...(migrated && { migrated }) });
   } else {
     appendLines(statePath, phases.map(p => `- [pending] ${planId} ${p.id}: ${p.name}`));
     ensurePointer();
-    print({ plan: planId, seeded: phases.length, resume: false });
+    print({ plan: planId, seeded: phases.length, resume: false, finished: false });
   }
 } else if (cmd === 'next') {
   const entries = loadEntries();
+  const fin = finishedRecord(planId, readText(statePath));
+  const finishedOut = fin ? { finished: true, ...fin } : { finished: false };
   const ready = executable(phases, entries).map(p => effective(p, entries));
   const flying = inFlight(phases, entries);
   const lost = missing(phases, entries);
   if (args.all) {
-    print({ plan: planId, phases: ready, all_terminal: allTerminal(phases, entries), in_flight: flying, missing: lost });
+    print({ plan: planId, phases: ready, all_terminal: allTerminal(phases, entries), in_flight: flying, missing: lost, ...finishedOut });
   } else if (ready.length > 0) {
-    print({ plan: planId, phase: ready[0], all_terminal: false });
+    print({ plan: planId, phase: ready[0], all_terminal: false, ...finishedOut });
   } else {
     const done = allTerminal(phases, entries);
     // Nothing executable, nothing in flight, not finished: the graph can never
@@ -516,6 +557,7 @@ if (cmd === 'lint') {
       in_flight: flying,
       stalled,
       missing: lost,
+      ...finishedOut,
       non_terminal: [...entries.entries()]
         .filter(([, e]) => !TERMINAL.includes(e.status))
         .map(([id, e]) => ({ id, status: e.status })),
@@ -555,7 +597,7 @@ if (cmd === 'lint') {
   // A plan phase whose entry vanished is re-created, so a missing entry can be
   // repaired after reconciling it against git.
   if (!entries.has(phaseId)) appendLines(statePath, [formatEntry(planId, phaseId, { status, name: phase.name, override: null, iter: 0, ...(forced && { forced }) })]);
-  else rewriteEntry(statePath, planId, phaseId, cur => ({ ...cur, status, ...(status === 'done' && { forced }) }));
+  else rewriteEntry(statePath, planId, phaseId, cur => ({ ...cur, status, ...(status === 'done' && { forced, reconciled: forced && cur.reconciled }) }));
   const cascaded = [];
   if (status === 'blocked' || status === 'plan-stale') {
     for (const depId of dependents(phases, phaseId)) {
@@ -645,6 +687,44 @@ if (cmd === 'lint') {
   rewriteEntry(statePath, planId, phaseId, cur => ({ ...cur, verify: `${pass ? 'pass' : 'fail'}:${snapshot}` }));
   print({ plan: planId, phase: phaseId, snapshot, gates, shell: result.shell, exit_code: result.exit_code,
     untested_acs: untested, pass, tail: result.tail });
+} else if (cmd === 'reconcile') {
+  const entries = loadEntries();
+  let commits;
+  try { commits = phaseCommitList(process.cwd()); }
+  catch (e) { fail(`reconcile needs a git work tree at ${process.cwd()}: ${String(e.stderr || e.message).trim().split(/\r?\n/).at(-1)}`); }
+  const reconciled = [];
+  const unchanged = [];
+  for (const p of phases) {
+    const cur = entries.get(p.id);
+    if (cur?.status === 'done' || !commits.some(c => c.id === p.id && (c.subject === `${p.id}: ${p.name}` || c.subject.startsWith(`${p.id}: ${p.name} `)))) { unchanged.push(p.id); continue; }
+    // D14: the commit is the evidence; no verify gate.
+    if (cur) rewriteEntry(statePath, planId, p.id, c => ({ ...c, status: 'done', reconciled: true }));
+    else appendLines(statePath, [formatEntry(planId, p.id, { status: 'done', name: p.name, override: null, iter: 0, reconciled: true })]);
+    reconciled.push(p.id);
+  }
+  if (allTerminal(phases, parseEntries(readText(statePath), planId))) dropPointer();
+  print({ plan: planId, reconciled, unchanged });
+} else if (cmd === 'finish') {
+  if (!['pr', 'merge', 'keep'].includes(args.action)) fail('usage: forge-state.mjs finish <plan-file> --action pr|merge|keep [--ref <url-or-sha-or-branch>]');
+  const ref = args.ref ?? '';
+  if (/\s/.test(ref)) fail('--ref must not contain whitespace');
+  const prior = finishedRecord(planId, readText(statePath));
+  if (prior) fail(`${planId} already finished (${[prior.action, prior.ref].filter(Boolean).join(' ')} at ${prior.at})`);
+  const rec = { action: args.action, ref, at: nowIso() };
+  const mp = markerPath(planId);
+  if (mp) writeText(mp, JSON.stringify(rec) + '\n');
+  appendLines(statePath, [`- [meta] ${planId} finished: action=${rec.action} ref=${rec.ref} at=${rec.at}`]);
+  dropPointer();
+  print({ plan: planId, finished: rec });
+} else if (cmd === 'preflight') {
+  const errors = [];
+  let remote = false;
+  try { remote = hasRemote(process.cwd()); } catch { /* not a git work tree: no remote */ }
+  const mode = config.on_complete ?? 'pr';
+  if ((mode === 'pr' || mode === 'merge') && !remote)
+    errors.push(`on_complete ${mode} needs a git remote; add one or set keep`);
+  print({ plan: planId, ok: errors.length === 0, errors, checks: { remote } });
+  process.exit(errors.length ? 1 : 0);
 } else {
   fail(`unknown command "${cmd}"`);
 }

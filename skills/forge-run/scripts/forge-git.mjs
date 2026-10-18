@@ -173,3 +173,31 @@ export function runGates(cmd, cwd, { bash = resolveBash({ gitExecPath: gitExecPa
     rmSync(tmp, { recursive: true, force: true });
   }
 }
+
+// Absolute git common dir: shared by every worktree of the repo (spec-002 D9).
+export function gitCommonDir(cwd) {
+  return resolve(cwd, git(cwd, ['rev-parse', '--git-common-dir']).trim());
+}
+
+// Every commit on HEAD's history whose subject starts "P<n>: ", newest first.
+export function phaseCommitList(cwd) {
+  const out = [];
+  for (const line of git(cwd, ['log', '--format=%H%x09%s']).split(/\r?\n/)) {
+    const tab = line.indexOf('\t');
+    const m = tab < 0 ? null : line.slice(tab + 1).match(/^P(\d+): /);
+    if (m) out.push({ id: `P${m[1]}`, sha: line.slice(0, tab), subject: line.slice(tab + 1) });
+  }
+  return out;
+}
+
+// "P<n>" -> sha of the NEWEST such commit.
+export function phaseCommits(cwd) {
+  const out = new Map();
+  for (const c of phaseCommitList(cwd)) if (!out.has(c.id)) out.set(c.id, c.sha);
+  return out;
+}
+
+// True when `git remote` lists at least one remote.
+export function hasRemote(cwd) {
+  return git(cwd, ['remote']).trim().length > 0;
+}

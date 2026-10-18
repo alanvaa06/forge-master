@@ -1,7 +1,7 @@
 - [done] plan-002 P1: plan contract lint + test-suite wiring
 - [done] plan-002 P2: forge-git helpers + verify {iter=1}
-- [in_progress] plan-002 P3: evidence-gated set done {iter=1}
-- [pending] plan-002 P4: reconcile, finish, preflight
+- [done] plan-002 P3: evidence-gated set done {iter=1}
+- [in_progress] plan-002 P4: reconcile, finish, preflight {iter=1}
 - [pending] plan-002 P5: run lock with heartbeat
 - [pending] plan-002 P6: forge-guard PreToolUse hook
 - [pending] plan-002 P7: plugin agent definitions
