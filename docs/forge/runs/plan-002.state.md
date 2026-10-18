@@ -1,0 +1,9 @@
+- [in_progress] plan-002 P1: plan contract lint + test-suite wiring
+- [pending] plan-002 P2: forge-git helpers + verify
+- [pending] plan-002 P3: evidence-gated set done
+- [pending] plan-002 P4: reconcile, finish, preflight
+- [pending] plan-002 P5: run lock with heartbeat
+- [pending] plan-002 P6: forge-guard PreToolUse hook
+- [pending] plan-002 P7: plugin agent definitions
+- [pending] plan-002 P8: skill prose integration
+- [pending] plan-002 P9: release docs + live checks

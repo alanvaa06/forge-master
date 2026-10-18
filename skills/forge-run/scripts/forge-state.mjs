@@ -251,7 +251,13 @@ function lint(plan, prdAcs) {
       if (!prdAcs.has(ac)) errors.push(`${ac}: covered by ${ps.join(', ')} but not in the PRD`);
   }
 
-  for (const key of ['K', 'max_parallel'])
+  const gates = config.gates ?? '';
+  if (gates === '' || /^<.*>$/.test(gates))
+    errors.push('Run Config gates is required (one bash command covering what CI runs)');
+  for (const [key, allowed] of [['mode', ['autonomous', 'attended']], ['isolation', ['worktree', 'in-place']], ['on_complete', ['pr', 'merge', 'keep']]])
+    if (config[key] !== undefined && !allowed.includes(config[key]))
+      errors.push(`Run Config ${key} must be one of ${allowed.join('|')}, got "${config[key]}"`);
+  for (const key of ['K', 'max_parallel', 'phase_budget', 'run_budget'])
     if (config[key] !== undefined && !/^[1-9]\d*$/.test(config[key]))
       errors.push(`Run Config ${key} must be a positive integer, got "${config[key]}"`);
   const parallel = Number(config.max_parallel) > 1;

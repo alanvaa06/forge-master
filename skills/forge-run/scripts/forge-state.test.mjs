@@ -14,6 +14,7 @@ const PLAN = `# Plan-007: demo  (PRD: docs/forge/prd/007-demo.md)
 ## Run Config
 - mode: autonomous
 - branch: forge/007-demo
+- gates: node --test
 - K: 3
 
 ## Phases
@@ -776,4 +777,49 @@ test('phase names ending in braces keep them through rewrites', () => {
   runJson(['escalate', planPath, 'P3', '--tier', 'senior']);
   runJson(['set', planPath, 'P3', 'done']);
   assert.match(state(), /- \[done\] plan-007 P3: docs \{beta\} \{tier=senior\}/);
+});
+
+// --- AC-2.1 / AC-2.2: Run Config contract (gates + enums + budgets) ---
+
+test('AC-2.1 lint exits 1 naming gates when gates is missing', () => {
+  writePlan(PLAN.replace('- gates: node --test\n', ''));
+  const r = runFail(['lint', planPath]);
+  assert.ok(r.stdout.errors.some(e => /gates/.test(e)), JSON.stringify(r.stdout.errors));
+  assert.equal(r.stdout.graph_errors.length, 0);
+});
+
+test('AC-2.1 lint exits 1 naming gates when gates is empty or a placeholder', () => {
+  for (const v of ['', '<cmd>']) {
+    writePlan(PLAN.replace('- gates: node --test', `- gates: ${v}`));
+    const r = runFail(['lint', planPath]);
+    assert.ok(r.stdout.errors.some(e => /gates/.test(e)), JSON.stringify(r.stdout.errors));
+  }
+});
+
+test('AC-2.1 legacy plan without gates still seeds', () => {
+  writePlan(PLAN.replace('- gates: node --test\n', ''));
+  runJson(['seed', planPath]);
+});
+
+test('AC-2.1 plan-template.md has a gates: line', () => {
+  const tpl = readFileSync(join(dirname(SCRIPT), '..', '..', '..', 'templates', 'plan-template.md'), 'utf8');
+  assert.match(tpl, /^- gates:/m);
+});
+
+test('AC-2.1 lint passes with gates set', () => {
+  assert.equal(runJson(['lint', planPath]).ok, true);
+});
+
+test('AC-2.2 lint names each bad enum and budget key', () => {
+  const bad = PLAN.replace('- mode: autonomous', '- mode: yolo\n- isolation: moon\n- on_complete: ship\n- phase_budget: 1,000\n- run_budget: 0');
+  writePlan(bad);
+  const r = runFail(['lint', planPath]);
+  for (const k of ['mode', 'isolation', 'on_complete', 'phase_budget', 'run_budget'])
+    assert.ok(r.stdout.errors.some(e => e.includes(`Run Config ${k} must be`)), `${k}: ${JSON.stringify(r.stdout.errors)}`);
+  assert.equal(r.stdout.graph_errors.length, 0);
+});
+
+test('AC-2.2 valid enums and budgets pass lint', () => {
+  writePlan(PLAN.replace('- mode: autonomous', '- mode: attended\n- isolation: in-place\n- on_complete: keep\n- phase_budget: 50000\n- run_budget: 900000'));
+  assert.equal(runJson(['lint', planPath]).ok, true);
 });

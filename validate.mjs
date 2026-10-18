@@ -1,6 +1,6 @@
 // validate.mjs — structural acceptance test for the forge-master plugin.
 // Dependency-free Node ESM. Exit 0 = all green, non-zero = failures.
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 let failures = 0;
@@ -161,6 +161,26 @@ if (existsSync(STATE) && existsSync(STATE_TEST)) {
   }
 }
 
+// 2d. Every *.test.mjs under skills/ and hooks/ joins the gate (hooks/ may not exist yet).
+const testFiles = [];
+const walk = (d) => {
+  if (!existsSync(d)) return;
+  for (const e of readdirSync(d, { withFileTypes: true })) {
+    const q = d + '/' + e.name;
+    if (e.isDirectory()) walk(q);
+    else if (e.name.endsWith('.test.mjs') && q !== STATE_TEST) testFiles.push(q);
+  }
+};
+walk('skills'); walk('hooks');
+for (const tf of testFiles) {
+  try {
+    execFileSync(process.execPath, ['--test', tf], { stdio: 'pipe' });
+    ok(`${tf} unit tests pass`);
+  } catch (e) {
+    fail(`${tf} unit tests failed - run: node --test ${tf}`);
+  }
+}
+
 // 3. Plan template skeleton.
 const TPL = 'templates/plan-template.md';
 if (!existsSync(TPL)) {
@@ -168,7 +188,7 @@ if (!existsSync(TPL)) {
 } else {
   const t = readFileSync(TPL, 'utf8');
   let bad = 0;
-  for (const m of ['## Run Config', '## Phases', 'covers:', 'depends_on:', 'tier:', 'process:', 'mode:', 'attended', 'on_complete:', 'pr | merge | keep', 'max_parallel:']) {
+  for (const m of ['## Run Config', '## Phases', 'covers:', 'depends_on:', 'tier:', 'process:', 'mode:', 'attended', 'on_complete:', 'pr | merge | keep', 'max_parallel:', 'gates:']) {
     if (!t.includes(m)) { fail(`${TPL}: missing "${m}"`); bad++; }
   }
   if (!bad) ok(`${TPL} checked`);
