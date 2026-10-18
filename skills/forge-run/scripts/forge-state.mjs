@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // forge-state — deterministic run-state machine for forge-master runs.
 // Owns the canonical entry format:
-//   - [status] plan-NNN P<n>: <name> [{tier=.. process=.. iter=N verify=pass|fail:<tree>}]
+//   - [status] plan-NNN P<n>: <name> [{tier=.. process=.. iter=N verify=pass|fail:<tree> forced}]
 //
 // Usage:
 //   node forge-state.mjs lint     <plan-file> [--prd <prd-file>]
 //   node forge-state.mjs seed     <plan-file>
 //   node forge-state.mjs next     <plan-file> [--all]
-//   node forge-state.mjs set      <plan-file> <P-id> <status>
+//   node forge-state.mjs set      <plan-file> <P-id> <status> [--force --reason "<text>"]
 //   node forge-state.mjs red      <plan-file> <P-id>
 //   node forge-state.mjs escalate <plan-file> <P-id> [--tier senior] [--process heavy]
 //   node forge-state.mjs recover  <plan-file>
@@ -37,7 +37,7 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
-import { snapshotWorktree, runGates, findUntestedAcs } from './forge-git.mjs';
+import { snapshotWorktree, snapshotHead, diffSnapshots, runGates, findUntestedAcs } from './forge-git.mjs';
 
 const NON_TERMINAL = ['pending', 'in_progress', 'in_progress-parallel'];
 const TERMINAL = ['done', 'blocked', 'blocked-upstream', 'plan-stale'];
@@ -80,6 +80,8 @@ function parseArgs(argv) {
     else if (argv[i] === '--tier') args.tier = argv[++i];
     else if (argv[i] === '--process') args.process = argv[++i];
     else if (argv[i] === '--gates') args.gates = argv[++i];
+    else if (argv[i] === '--force') args.force = true;
+    else if (argv[i] === '--reason') args.reason = argv[++i];
     else args.rest.push(argv[i]);
   }
   return args;
@@ -337,7 +339,9 @@ function parseSuffix(raw) {
   const override = {};
   let iter = 0;
   let verify;
+  let forced = false;
   for (const tok of raw.trim().split(/\s+/)) {
+    if (tok === 'forced') { forced = true; continue; }
     const m = tok.match(/^(tier|process|iter|verify)=(\S+)$/);
     if (!m) return null;
     if (m[1] === 'iter') iter = Number(m[2]) || 0;
@@ -346,7 +350,7 @@ function parseSuffix(raw) {
       verify = m[2];
     } else override[m[1]] = m[2];
   }
-  return { override: Object.keys(override).length ? override : null, iter, ...(verify && { verify }) };
+  return { override: Object.keys(override).length ? override : null, iter, ...(verify && { verify }), ...(forced && { forced }) };
 }
 
 // One entry line -> {status, name, override, iter}, or null if not this plan's.
@@ -359,12 +363,13 @@ function parseEntry(line, planId) {
 }
 
 // Fixed order so the persisted line is deterministic regardless of bump order.
-function formatSuffix(override, iter, verify) {
+function formatSuffix(override, iter, verify, forced) {
   const parts = [];
   if (override?.tier) parts.push(`tier=${override.tier}`);
   if (override?.process) parts.push(`process=${override.process}`);
   if (iter > 0) parts.push(`iter=${iter}`);
   if (verify) parts.push(`verify=${verify}`);
+  if (forced) parts.push('forced');
   return parts.length ? ` {${parts.join(' ')}}` : '';
 }
 
@@ -379,10 +384,10 @@ function parseEntries(text, planId) {
 
 const planLines = (text, planId) => text.split(/\r?\n/).filter(l => parseEntry(l, planId));
 const formatEntry = (planId, phaseId, e) =>
-  `- [${e.status}] ${planId} ${phaseId}: ${e.name}${formatSuffix(e.override, e.iter, e.verify)}`;
+  `- [${e.status}] ${planId} ${phaseId}: ${e.name}${formatSuffix(e.override, e.iter, e.verify, e.forced)}`;
 
 // Rewrite one matched entry line; `fn` receives its current
-// {status, name, override, iter} and returns the next one. Whatever it does not
+// {status, name, override, iter, verify, forced} and returns the next one. Whatever it does not
 // change is carried over verbatim, so a status flush keeps the suffix and an
 // escalation flush keeps the status.
 function rewriteEntry(path, planId, phaseId, fn) {
@@ -523,14 +528,34 @@ if (cmd === 'lint') {
   }
 } else if (cmd === 'set') {
   const [phaseId, status] = cmdArgs;
-  if (!status) fail('usage: forge-state.mjs set <plan-file> <P-id> <status>');
+  if (!status) fail('usage: forge-state.mjs set <plan-file> <P-id> <status> [--force --reason "<text>"]');
   if (!STATUSES.includes(status)) fail(`invalid status "${status}", one of: ${STATUSES.join(', ')}`);
   const entries = loadEntries();
   const phase = requirePhase(entries, phaseId, 'set <plan-file> <P-id> <status>', false);
+  if (args.force && !args.reason?.trim()) fail('--force requires --reason "<text>"');
+  const forced = status === 'done' && args.force === true;
+  // Evidence gate (C4): done needs a passing verify of exactly the committed code.
+  if (status === 'done' && !forced) {
+    const verified = entries.get(phaseId)?.verify;
+    const vTree = verified?.startsWith('pass:') ? verified.slice(5) : null;
+    let head;
+    try { head = snapshotHead(process.cwd()); }
+    catch (e) {
+      const why = String(e.stderr || e.message).trim().split(/\r?\n/).at(-1);
+      fail(`${phaseId}: no passing verify for the committed code (not a git work tree: ${why}). Use --force --reason "<text>" only for phases with no code to verify.`);
+    }
+    if (vTree !== head) {
+      let differing = [];
+      if (vTree) { try { differing = diffSnapshots(process.cwd(), vTree, head); } catch { /* verified tree gone */ } }
+      fail(`${phaseId}: no passing verify for the committed code (verified ${vTree ?? 'none'}, committed ${head})` +
+        `${differing.length ? `; differing: ${differing.join(', ')}` : ''}. ` +
+        'Run forge-state verify after the last code change, commit with git add -A, then set done.');
+    }
+  }
   // A plan phase whose entry vanished is re-created, so a missing entry can be
   // repaired after reconciling it against git.
-  if (!entries.has(phaseId)) appendLines(statePath, [formatEntry(planId, phaseId, { status, name: phase.name, override: null, iter: 0 })]);
-  else rewriteEntry(statePath, planId, phaseId, cur => ({ ...cur, status }));
+  if (!entries.has(phaseId)) appendLines(statePath, [formatEntry(planId, phaseId, { status, name: phase.name, override: null, iter: 0, ...(forced && { forced }) })]);
+  else rewriteEntry(statePath, planId, phaseId, cur => ({ ...cur, status, ...(status === 'done' && { forced }) }));
   const cascaded = [];
   if (status === 'blocked' || status === 'plan-stale') {
     for (const depId of dependents(phases, phaseId)) {
@@ -542,7 +567,8 @@ if (cmd === 'lint') {
   }
   const terminal = allTerminal(phases, parseEntries(readText(statePath), planId));
   if (terminal) dropPointer();
-  print({ plan: planId, phase: phaseId, status, cascaded_blocked_upstream: cascaded, all_terminal: terminal });
+  print({ plan: planId, phase: phaseId, status, cascaded_blocked_upstream: cascaded, all_terminal: terminal,
+    ...(forced && { forced: true, reason: args.reason.trim() }) });
 } else if (cmd === 'red') {
   const [phaseId] = cmdArgs;
   const entries = loadEntries();

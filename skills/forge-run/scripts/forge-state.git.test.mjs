@@ -422,3 +422,116 @@ test('AC-2.3 snapshotWorktree of a dirty tree equals snapshotHead after git add 
   commitAll('phase');
   assert.equal(snapshotHead(repo), v);
 });
+
+// --- AC-2.4 / AC-2.5: set done is gated on a passing verify of the committed code ---
+
+test('AC-2.4 set done succeeds when verify passed and the commit matches the verified snapshot', () => {
+  seed();
+  write('src/app.js', 'module.exports = 5;\n');
+  cliJson(['verify', PLAN_PATH, 'P1']);
+  commitAll('phase');
+  const r = cliJson(['set', PLAN_PATH, 'P1', 'done']);
+  assert.equal(r.status, 'done');
+  assert.equal(r.forced, undefined);
+  assert.match(stateLine(), /^- \[done\] plan-007 P1: core \{verify=pass:[0-9a-f]{40}\}$/);
+});
+
+test('AC-2.4 set done without any verify exits 1 and leaves the entry unchanged', () => {
+  seed();
+  const before = stateLine();
+  const r = cliFail(['set', PLAN_PATH, 'P1', 'done']);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /P1: no passing verify for the committed code \(verified none, committed [0-9a-f]{40}\)/);
+  assert.match(r.stderr, /Run forge-state verify after the last code change, commit with git add -A, then set done\./);
+  assert.equal(stateLine(), before);
+});
+
+test('AC-2.4 set done after a failing verify exits 1 and leaves the entry unchanged', () => {
+  seed('- gates: node -e "process.exit(2)"');
+  cliJson(['verify', PLAN_PATH, 'P1']);
+  commitAll('phase');
+  const before = stateLine();
+  const r = cliFail(['set', PLAN_PATH, 'P1', 'done']);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /no passing verify/);
+  assert.equal(stateLine(), before);
+});
+
+test('AC-2.4 set done refuses when the committed code differs from the verified snapshot, listing paths', () => {
+  seed();
+  write('src/app.js', 'module.exports = 5;\n');
+  cliJson(['verify', PLAN_PATH, 'P1']);
+  write('src/app.js', 'module.exports = 6;\n');
+  write('src/extra.js', 'x\n');
+  commitAll('phase');
+  const before = stateLine();
+  const r = cliFail(['set', PLAN_PATH, 'P1', 'done']);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /differing: .*src\/app\.js/);
+  assert.match(r.stderr, /src\/extra\.js/);
+  assert.equal(stateLine(), before);
+});
+
+test('AC-2.4 set done refuses when verified code was never committed', () => {
+  seed();
+  write('src/app.js', 'module.exports = 5;\n');
+  cliJson(['verify', PLAN_PATH, 'P1']);
+  const r = cliFail(['set', PLAN_PATH, 'P1', 'done']);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /differing: src\/app\.js/);
+});
+
+test('AC-2.4 other statuses are not gated', () => {
+  seed();
+  assert.equal(cliJson(['set', PLAN_PATH, 'P1', 'in_progress']).status, 'in_progress');
+  assert.equal(cliJson(['set', PLAN_PATH, 'P1', 'blocked']).status, 'blocked');
+});
+
+test('AC-2.5 set done --force --reason succeeds, persists forced and prints it', () => {
+  seed();
+  const r = cliJson(['set', PLAN_PATH, 'P1', 'done', '--force', '--reason', 'manual only']);
+  assert.equal(r.forced, true);
+  assert.equal(r.reason, 'manual only');
+  assert.equal(stateLine(), '- [done] plan-007 P1: core {forced}');
+  // the forced token round-trips through other commands
+  assert.equal(cliJson(['status', PLAN_PATH]).counts.done, 1);
+});
+
+test('AC-2.5 forced keeps earlier tokens and sits after verify', () => {
+  seed();
+  const v = cliJson(['verify', PLAN_PATH, 'P1']).snapshot;
+  cliJson(['set', PLAN_PATH, 'P1', 'done', '--force', '--reason', 'r']);
+  assert.equal(stateLine(), `- [done] plan-007 P1: core {verify=pass:${v} forced}`);
+});
+
+test('AC-2.5 --force without --reason exits 1 and leaves the entry unchanged', () => {
+  seed();
+  const before = stateLine();
+  const r = cliFail(['set', PLAN_PATH, 'P1', 'done', '--force']);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /--force requires --reason/);
+  assert.equal(stateLine(), before);
+});
+
+test('AC-2.4 set done outside a git work tree refuses; --force --reason succeeds', () => {
+  seed();
+  const dir = mkdtempSync(join(tmpdir(), 'forge-nogit-'));
+  try {
+    const run = extra => execFileSync(process.execPath,
+      [SCRIPT, 'set', join(repo, PLAN_PATH), 'P1', 'done', '--state', join(repo, STATE_PATH), ...extra],
+      { cwd: dir, env: { ...ENV, GIT_CEILING_DIRECTORIES: tmpdir() }, encoding: 'utf8', stdio: 'pipe' });
+    assert.throws(() => run([]), e => e.status === 1 && /no passing verify|git work tree/.test(e.stderr));
+    assert.equal(stateLine(), '- [pending] plan-007 P1: core');
+    assert.equal(JSON.parse(run(['--force', '--reason', 'x'])).forced, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('AC-2.5 a later gated done drops the forced token', () => {
+  seed();
+  cliJson(['set', PLAN_PATH, 'P1', 'done', '--force', '--reason', 'r']);
+  write('src/app.js', 'module.exports = 9;\n');
+  cliJson(['verify', PLAN_PATH, 'P1']);
+  commitAll('phase');
+  cliJson(['set', PLAN_PATH, 'P1', 'done']);
+  assert.match(stateLine(), /^- \[done\] plan-007 P1: core \{verify=pass:[0-9a-f]{40}\}$/);
+});
