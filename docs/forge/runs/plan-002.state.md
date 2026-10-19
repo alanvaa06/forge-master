@@ -3,7 +3,7 @@
 - [done] plan-002 P3: evidence-gated set done {iter=1}
 - [done] plan-002 P4: reconcile, finish, preflight {iter=1}
 - [done] plan-002 P5: run lock with heartbeat {iter=1}
-- [in_progress] plan-002 P6: forge-guard PreToolUse hook
-- [pending] plan-002 P7: plugin agent definitions
+- [done] plan-002 P6: forge-guard PreToolUse hook
+- [in_progress] plan-002 P7: plugin agent definitions {iter=1}
 - [pending] plan-002 P8: skill prose integration
 - [pending] plan-002 P9: release docs + live checks

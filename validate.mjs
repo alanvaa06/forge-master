@@ -147,6 +147,48 @@ for (const s of SKILLS) {
   }
 }
 
+// 2b2. Agent definitions (spec-002 I7, D3, D19, AC-1.1): frontmatter name/description/model/effort,
+//      description pinned to the I7 string (no "proactively"), reviewer tools exactly Read/Grep/Glob
+//      with Edit/Write/NotebookEdit/Bash disallowed, bodies reference plugin files via ${CLAUDE_PLUGIN_ROOT}.
+const AGENT_DESC = 'Internal to forge-master runs: dispatched only by the /forge-master:run orchestrator. Not for general tasks.';
+const AGENTS = [
+  { path: 'agents/forge-implementer-junior.md', name: 'forge-implementer-junior', model: 'sonnet', effort: 'low' },
+  { path: 'agents/forge-implementer-senior.md', name: 'forge-implementer-senior', model: 'opus', effort: 'high' },
+  { path: 'agents/forge-reviewer.md', name: 'forge-reviewer', model: 'opus', effort: 'high', reviewer: true },
+];
+const yamlVal = (v) => v.trim().replace(/^\[|\]$/g, '').trim().replace(/^(["'])(.*)\1$/, '$2');
+const yamlList = (v) => (v === null ? [] : v.split(',').map((x) => yamlVal(x)).filter(Boolean));
+for (const a of AGENTS) {
+  if (!existsSync(a.path)) { fail(a.path + ' missing'); continue; }
+  const atext = readFileSync(a.path, 'utf8').replace(/^\uFEFF/, '');
+  const afm = atext.match(FM);
+  if (!afm) { fail(a.path + ' missing YAML frontmatter'); continue; }
+  const field = (k) => { const m = afm[1].match(new RegExp('^' + k + ':[ \t]*(.*)$', 'm')); return m ? yamlVal(m[1]) : null; };
+  const rawField = (k) => { const m = afm[1].match(new RegExp('^' + k + ':[ \t]*(.*)$', 'm')); return m ? m[1].trim().replace(/^\[|\]$/g, '') : null; };
+  let bad = false;
+  if (field('name') !== a.name) { fail(`${a.path}: frontmatter name != ${a.name}`); bad = true; }
+  if (field('model') !== a.model) { fail(`${a.path}: frontmatter model != ${a.model}`); bad = true; }
+  if (field('effort') !== a.effort) { fail(`${a.path}: frontmatter effort != ${a.effort}`); bad = true; }
+  const desc = field('description');
+  if (!desc) { fail(`${a.path}: missing/empty description`); bad = true; }
+  else {
+    if (/proactively/i.test(desc)) { fail(`${a.path}: description must not say "proactively" (D19)`); bad = true; }
+    if (desc !== AGENT_DESC) { fail(`${a.path}: description != I7 string`); bad = true; }
+  }
+  if (a.reviewer) {
+    const dis = yamlList(rawField('disallowedTools'));
+    for (const t of ['Edit', 'Write', 'NotebookEdit', 'Bash']) {
+      if (!dis.includes(t)) { fail(`${a.path}: disallowedTools must include ${t}`); bad = true; }
+    }
+    const tools = yamlList(rawField('tools')).sort().join(',');
+    if (tools !== 'Glob,Grep,Read') { fail(`${a.path}: tools must be exactly Read, Grep, Glob (D3)`); bad = true; }
+  }
+  if (/(?<!\$\{CLAUDE_PLUGIN_ROOT\}\/)skills\/forge-run\/references\//.test(atext.slice(afm[0].length))) {
+    fail(`${a.path}: body references skills/forge-run/references/ without the \${CLAUDE_PLUGIN_ROOT}/ prefix`); bad = true;
+  }
+  if (!bad) ok(`${a.path} frontmatter`);
+}
+
 // 2c. State script: exists and its unit tests pass (deterministic run-state bookkeeping).
 const STATE = 'skills/forge-run/scripts/forge-state.mjs';
 const STATE_TEST = 'skills/forge-run/scripts/forge-state.test.mjs';
