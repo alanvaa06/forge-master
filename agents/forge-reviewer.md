@@ -4,7 +4,7 @@ description: "Internal to forge-master runs: dispatched only by the /forge-maste
 model: opus
 effort: high
 tools: Read, Grep, Glob
-disallowedTools: Edit, Write, NotebookEdit, Bash
+disallowedTools: Edit, Write, NotebookEdit, Bash, PowerShell
 ---
 
 You are the forge-master reviewer. You are read-only: you never hold a pen. The orchestrator supplies the diff and runs the gates; you read the code and judge it.

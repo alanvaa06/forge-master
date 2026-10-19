@@ -180,7 +180,7 @@ for (const s of SKILLS) {
 
 // 2b2. Agent definitions (spec-002 I7, D3, D19, AC-1.1): frontmatter name/description/model/effort,
 //      description pinned to the I7 string (no "proactively"), reviewer tools exactly Read/Grep/Glob
-//      with Edit/Write/NotebookEdit/Bash disallowed, bodies reference plugin files via ${CLAUDE_PLUGIN_ROOT}.
+//      with Edit/Write/NotebookEdit/Bash/PowerShell disallowed, bodies reference plugin files via ${CLAUDE_PLUGIN_ROOT}.
 const AGENT_DESC = 'Internal to forge-master runs: dispatched only by the /forge-master:run orchestrator. Not for general tasks.';
 const AGENTS = [
   { path: 'agents/forge-implementer-junior.md', name: 'forge-implementer-junior', model: 'sonnet', effort: 'low' },
@@ -208,7 +208,7 @@ for (const a of AGENTS) {
   }
   if (a.reviewer) {
     const dis = yamlList(rawField('disallowedTools'));
-    for (const t of ['Edit', 'Write', 'NotebookEdit', 'Bash']) {
+    for (const t of ['Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell']) {
       if (!dis.includes(t)) { fail(`${a.path}: disallowedTools must include ${t}`); bad = true; }
     }
     const tools = yamlList(rawField('tools')).sort().join(',');
@@ -255,8 +255,9 @@ for (const tf of testFiles) {
 }
 
 // 2e. Guard hook registration (spec-002 I6, D18, AC-1.6): hooks/hooks.json registers a PreToolUse
-//     command hook whose matcher covers the guarded tools and whose command + args
-//     reference ${CLAUDE_PLUGIN_ROOT} (exec form or string form both accepted).
+//     command hook whose matcher covers the guarded tools (Edit, Write, NotebookEdit and both
+//     shells, Bash and PowerShell) and whose command + args reference ${CLAUDE_PLUGIN_ROOT}
+//     (exec form or string form both accepted); every ${CLAUDE_PLUGIN_ROOT}/... path it names exists.
 const HJ = 'hooks/hooks.json';
 if (!existsSync(HJ)) {
   fail(HJ + ' missing');
@@ -267,13 +268,20 @@ if (!existsSync(HJ)) {
     if (!Array.isArray(entries)) throw new Error('hooks.PreToolUse is not an array');
     const covers = (matcher, tool) =>
       matcher === undefined || matcher === '' || matcher === '*' || new RegExp(`^(?:${matcher})$`).test(tool);
-    const guarded = ['Edit', 'Write', 'NotebookEdit', 'Bash'];
-    const good = entries.some((e) =>
-      guarded.every((t) => covers(e.matcher, t)) &&
-      (e.hooks ?? []).some((c) => c.type === 'command' &&
-        [c.command, ...(Array.isArray(c.args) ? c.args : [])].some((s) => typeof s === 'string' && s.includes('${CLAUDE_PLUGIN_ROOT}'))));
-    if (!good) fail(`${HJ}: no PreToolUse command hook whose matcher covers ${guarded.join('|')} and whose command/args reference \${CLAUDE_PLUGIN_ROOT}`);
-    else ok(`${HJ} registers the PreToolUse guard (${guarded.join('|')}, \${CLAUDE_PLUGIN_ROOT})`);
+    const guarded = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell'];
+    const rootRefs = (c) => [c.command, ...(Array.isArray(c.args) ? c.args : [])]
+      .filter((s) => typeof s === 'string')
+      .flatMap((s) => s.match(/\$\{CLAUDE_PLUGIN_ROOT\}[^\s"']*/g) ?? []);
+    const hook = entries
+      .filter((e) => guarded.every((t) => covers(e.matcher, t)))
+      .flatMap((e) => e.hooks ?? [])
+      .find((c) => c.type === 'command' && rootRefs(c).length);
+    if (!hook) fail(`${HJ}: no PreToolUse command hook whose matcher covers ${guarded.join('|')} and whose command/args reference \${CLAUDE_PLUGIN_ROOT} (AC-1.6)`);
+    else {
+      const missing = rootRefs(hook).map((r) => r.replace('${CLAUDE_PLUGIN_ROOT}', '.')).filter((p) => !existsSync(p));
+      if (missing.length) fail(`${HJ}: guard hook names missing file(s): ${missing.join(', ')} (AC-1.6)`);
+      else ok(`${HJ} registers the PreToolUse guard (${guarded.join('|')}, \${CLAUDE_PLUGIN_ROOT}, script exists) (AC-1.6)`);
+    }
   } catch (e) {
     fail(`${HJ} invalid: ${e.message}`);
   }
