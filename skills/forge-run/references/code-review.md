@@ -4,11 +4,14 @@ Loaded by `forge-run` when a `heavy` phase reaches green and needs its independe
 
 ## Reviewer input (minimal context, like any phase subagent)
 
-The reviewer subagent receives exactly:
+The reviewer is the plugin agent `forge-master:forge-reviewer` (bare `forge-reviewer` if the scoped name is rejected). It is read-only (Read, Grep, Glob; no Bash), so the orchestrator runs the gates and supplies the diff. It receives exactly:
 - the phase's plan section (covers, success, notes),
 - the covered AC texts (Given/When/Then),
 - the spec sections the phase cites (Interfaces, File Map rows) when a spec exists,
-- the diff produced by the phase (not the whole repo history).
+- the diff produced by the phase (not the whole repo history),
+- the working directory path (the run root, or the phase worktree).
+
+Its final message is its findings (`blocker|nit`, file:line, claim, evidence) ending in `verdict: approve` or `verdict: blockers`; its only signal is `plan-assumption-broken`. Route by verdict.
 
 Never the run history. The reviewer is INDEPENDENT: a fresh subagent that did not write the code.
 
@@ -28,8 +31,8 @@ Never the run history. The reviewer is INDEPENDENT: a fresh subagent that did no
 
 - **Blockers** → the finding goes back to the implementation cycle; the phase re-enters implement->verify and `iter` increments (`forge-state red`, same as a red test) — review failures feed the SAME K/escalation machinery as red tests. Fix, re-verify, re-review the fixed area.
 - **Nits** → logged to `results.md` with the phase entry; NEVER block the commit and never increment `iter`.
-- **Feedback is verified against the code before being implemented, not applied blindly.** If the implementer can show the reviewer's claim is factually wrong (test exists, interface does match), record the disagreement in `results.md` and proceed — the test runner, not the reviewer, has final authority on green.
-- Before acting, the implementer classifies EVERY finding as exactly one of: **correct** (act on it), **incorrect-with-evidence** (rebut: cite the test, line, or interface that disproves it; record the disagreement in `results.md` and proceed), or **unverifiable** (cannot be confirmed either way: treat a blocker as correct — fix it; drop a nit). Silent agreement and silent dismissal are both violations.
+- **Feedback is verified against the code before being implemented, not applied blindly.** If the implementer can show the reviewer's claim is factually wrong (test exists, interface does match), the implementer reports it, the orchestrator records the disagreement in `results.md`, and the phase proceeds — the test runner, not the reviewer, has final authority on green.
+- Before acting, the implementer classifies EVERY finding as exactly one of: **correct** (act on it), **incorrect-with-evidence** (rebut: cite the test, line, or interface that disproves it; the orchestrator records the disagreement in `results.md`, then proceed), or **unverifiable** (cannot be confirmed either way: treat a blocker as correct — fix it; drop a nit). Silent agreement and silent dismissal are both violations.
 
 ---
 Provenance: discipline adapted from the superpowers methodology (obra), frozen into this plugin on 2026-06-12. Self-contained by design — audit against upstream on superpowers major releases.

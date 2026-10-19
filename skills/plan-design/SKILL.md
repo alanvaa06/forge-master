@@ -44,6 +44,8 @@ Identify sets of phases that are mutually independent (no `depends_on` path betw
 ## Step 4 — Run config
 Fill `Run Config`: mode (default `autonomous`), `branch: forge/NNN-<slug>`, `isolation: worktree` (default — the run gets its own sibling worktree so the user's primary dir, editor, and any concurrent session stay untouched; only set `in-place` when the user confirms this is the sole session on the repo), `K: 3`, `phase_budget` / `run_budget` heuristics sized to the PRD, `on_complete` (default `pr` — push branch + open PR | `merge` | `keep`), and `max_parallel: 1` (default — fully sequential) or N (max concurrent phases per batch). Only set > 1 when Parallel Groups exist.
 
+Derive `gates:` from the repo's CI configuration (e.g. `.github/workflows/*.yml`) and its package/test scripts (package.json scripts, Makefile, pyproject): one bash command covering everything CI runs, e.g. `npm test && npx tsc --noEmit`. Show it on the Run Config card.
+
 For a large or heavy plan, optionally hand off to the `budget` skill (`/forge-master:budget`) BEFORE gate 2 — it produces a per-phase token matrix and fills `phase_budget` / `run_budget` with principled numbers instead of heuristics, and flags any phase whose cost contradicts its tag. Optional; skip it for small plans.
 
 ## Step 5 — Write the file
@@ -58,6 +60,8 @@ Run `node "${CLAUDE_PLUGIN_ROOT}/skills/forge-run/scripts/forge-state.mjs" lint 
 Present TWO blocks, then gate.
 
 ### Block A — Run Config card
+Before presenting, run `node "${CLAUDE_PLUGIN_ROOT}/skills/forge-run/scripts/forge-state.mjs" preflight docs/forge/plans/plan-NNN.md`.
+
 Render the frozen-candidate config with a health mark on each diagnosable line (`✓` healthy · `⚠` advisory · `⛔` hard-block). Format `phase_budget` / `run_budget` with thousands separators for readability (e.g. `250,000`, `1,200,000`) — this is display only; the persisted plan `## Run Config` keeps them as raw integers (no separators) so the loop's budget math stays unambiguous.
 
 ```
@@ -70,7 +74,7 @@ Render the frozen-candidate config with a health mark on each diagnosable line (
 - **phase_budget:** ~<n,nnn> · soft early-escalation signal        <mark>
 - **run_budget:** ~<n,nnn> · global cap, clean-stop on exhaust     <mark>
 - **on_complete:** <pr|merge|keep> · <one-line meaning>
-- **gates (every phase):** <gate cmds the run will enforce>
+- **gates (every phase):** <the derived gates: command>
 ```
 
 Mark logic:
@@ -78,6 +82,7 @@ Mark logic:
 - **run_budget** — `✓` if ≥ matrix TOTAL-high × headroom · `⚠ below est` if under TOTAL-high · `(heuristic — no matrix)` if `budget` never ran.
 - **phase_budget** — `✓` if ≥ a typical phase's estimated high · `⚠ below est` if under · `(heuristic — no matrix)` if no matrix.
 - **K** — `✓` at 2–5 · `⚠ low` if <2 · `⚠ high` if >6.
+- **on_complete** — `✓` for `keep`, or `pr`/`merge` when preflight finds a remote · `⛔ no remote` if `pr`/`merge` and preflight reports none (option a) withheld until the user adds a remote or picks `keep`).
 - **max_parallel** — `✓` at 1 · `✓ groups file-disjoint` if >1 WITH `## Parallel Groups` · `⛔ no Parallel Groups` if >1 WITHOUT.
 
 ### Block B — the plan
@@ -86,10 +91,10 @@ Then present: the lint result (`ok: true`, plus any warnings), the phase list, e
 ### The gate
 Ask as a lettered list:
 > Review the config and plan above. Next:
-> a) Approve & freeze — **Recommended** *(omit this line whenever any card line is ⛔)*
+> a) Approve & freeze — **Recommended** *(omit this line whenever any card line is ⛔: approve option withheld)*
 > b) Change something — name the knob and the new value
 
-On **b)**, apply the matching pushback, then edit the plan's Run Config and re-present Block A once (back to a/b). Pushback is **advisory — warn once, then honor** for every knob EXCEPT the one hard block:
+On **b)**, apply the matching pushback, then edit the plan's Run Config and re-present Block A once (back to a/b). Pushback is **advisory — warn once, then honor** for every knob EXCEPT the hard blocks (no `## Parallel Groups` with max_parallel > 1; no remote with `on_complete` pr/merge):
 
 - **isolation set to `in-place`:** "⚠ in-place checks out `forge/NNN-<slug>` in the working dir — any other session or your open editor gets yanked onto the run branch (the collision worktree mode exists to prevent). Safe only if this is the sole session on the repo. Keep in-place?"
 - **run_budget below matrix TOTAL-high:** "⚠ run_budget ~X is below the matrix TOTAL-high (~Y). The loop stops cleanly mid-run with a report at the cap — you may not reach the finish action. Trade: ~Δ fewer tokens for a possible incomplete run. Keep ~X?"
@@ -100,7 +105,8 @@ On **b)**, apply the matching pushback, then edit the plan's Run Config and re-p
   > I'm estimating from heuristics — no matrix was run, so I can't say how close ~X is to real cost.
   > a) Run `/forge-master:budget` first — **Recommended**, grounds this in real numbers
   > b) Keep ~X anyway — you accept the guess
-- **max_parallel > 1 with no `## Parallel Groups`** (⛔ HARD — the only blocker): "⛔ max_parallel=X but no Parallel Groups are declared. Concurrent phases run in worktrees with no file-disjointness proof — merge-back can corrupt overlapping files. Can't freeze. Either set max_parallel: 1, or declare Parallel Groups (I'll re-check file-disjointness)." Option a) stays unavailable until this clears.
+- **max_parallel > 1 with no `## Parallel Groups`** (⛔ HARD): "⛔ max_parallel=X but no Parallel Groups are declared. Concurrent phases run in worktrees with no file-disjointness proof — merge-back can corrupt overlapping files. Can't freeze. Either set max_parallel: 1, or declare Parallel Groups (I'll re-check file-disjointness)." Option a) stays unavailable until this clears.
+- **on_complete `pr`/`merge` with no remote** (⛔ HARD, preflight reports none): "⛔ on_complete=X needs a git remote and none exists. Can't freeze. Add a remote, or set on_complete: keep." The approve option is withheld until then.
 
 Advisory pushback fires ONCE per knob; if the user reconfirms, honor it and move on — no re-litigating. The change loop converges because every pass is user-driven.
 

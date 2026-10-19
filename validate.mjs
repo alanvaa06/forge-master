@@ -4,8 +4,9 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 let failures = 0;
-const fail = (m) => { console.error('FAIL: ' + m); failures++; };
-const ok = (m) => console.log('ok:   ' + m);
+const asc = (m) => String(m).replace(/[^ -~]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+const fail = (m) => { console.error('FAIL: ' + asc(m)); failures++; };
+const ok = (m) => console.log('ok:   ' + asc(m));
 
 // 1. Manifest parses and identifies the plugin.
 const PJ = '.claude-plugin/plugin.json';
@@ -77,7 +78,9 @@ const SKILLS = [
   {
     path: 'skills/plan-design/SKILL.md',
     name: 'plan-design',
-    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md', 'Parallel Groups', 'budget', 'forge-state.mjs" lint', 'P0: setup test harness'],
+    markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md', 'Parallel Groups', 'budget', 'forge-state.mjs" lint', 'P0: setup test harness',
+      'gates:', '.github/workflows', 'forge-state.mjs" preflight', '⛔ no remote', 'approve option withheld'],
+    absent: ['EXCEPT the one hard block', 'the only blocker'],
   },
   {
     path: 'skills/budget/SKILL.md',
@@ -94,7 +97,13 @@ const SKILLS = [
       'dispatch.md', 'inline execution', 'subagent-driven', 'debugging.md', 'parallel.md',
       'forge-state.mjs', 'blocked-upstream', '/goal', '/loop',
       'forge-state.mjs" lint', 'forge-state recover', 'forge-state red', 'docs/forge/runs/', 'stalled', 'sesion-log.md',
+      'forge-state verify', 'timeout 600000', 'git add -A', 'forge-state reconcile', 'forge-state preflight',
+      'forge-state finish', 'finished: true', 'cancel any `/loop`', '--holder ${CLAUDE_SESSION_ID}',
+      'forge-master:forge-implementer-', 'forge-master:forge-reviewer', '--reason',
+      'ok: false', 'forge: finish plan-', 'git worktree add <path> forge/NNN-<slug>',
+      'plan-NNN.lock.json', 'only for phases with no code to verify', 'INIT and the LOOP',
     ],
+    absent: ['git log --oneline --grep', 'git log --grep', 'First make sure no other session', 'implement -> write & run the covered-AC tests -> commit.', 'reconcile`: INIT only'],
   },
 ];
 
@@ -106,11 +115,13 @@ const REFS = [
   },
   {
     path: 'skills/forge-run/references/code-review.md',
-    markers: ['blocker', 'nit', 'iter', 'AC coverage', 'regression risk', 'verified against the code', 'incorrect-with-evidence'],
+    markers: ['blocker', 'nit', 'iter', 'AC coverage', 'regression risk', 'verified against the code', 'incorrect-with-evidence',
+      'forge-master:forge-reviewer', 'read-only', 'verdict: approve', 'verdict: blockers', 'working directory', 'implementer reports it, the orchestrator records'],
   },
   {
     path: 'skills/forge-run/references/dispatch.md',
-    markers: ['signal', 'done | stuck | plan-assumption-broken', 'Freshness', 'hypotheses'],
+    markers: ['signal', 'done | stuck | plan-assumption-broken', 'Freshness', 'hypotheses',
+      'forge-master:forge-implementer-', 'forge-implementer-<tier>', 'orchestrator owns every commit', 'every state write', 'phase worktrees'],
   },
   {
     path: 'skills/forge-run/references/debugging.md',
@@ -118,7 +129,9 @@ const REFS = [
   },
   {
     path: 'skills/forge-run/references/parallel.md',
-    markers: ['worktree', 'file-disjoint', 'integration failure', 'max_parallel'],
+    markers: ['worktree', 'file-disjoint', 'integration failure', 'max_parallel',
+      'forge-state verify', 'orchestrator commits', '--state', 'git merge --squash', 'wip P<n>', 'timeout 600000'],
+    absent: ['the orchestrator commits in the phase worktree (`git add -A`, subject `P<n>: <name>`)'],
   },
 ];
 for (const r of REFS) {
@@ -127,6 +140,9 @@ for (const r of REFS) {
   let bad = 0;
   for (const m of r.markers) {
     if (!text.includes(m)) { fail(`${r.path}: missing required marker "${m}"`); bad++; }
+  }
+  for (const m of r.absent || []) {
+    if (text.includes(m)) { fail(`${r.path}: superseded text must be absent: "${m}"`); bad++; }
   }
   if (!bad) ok(`${r.path} checked`);
 }
@@ -144,6 +160,17 @@ for (const s of SKILLS) {
   }
   for (const m of s.markers) {
     if (!text.includes(m)) fail(`${s.path}: missing required marker "${m}"`);
+  }
+  if (s.name === 'run') {
+    const lp = text.slice(text.indexOf('## LOOP'));
+    const iv = lp.indexOf('forge-state verify'), id = lp.indexOf('forge-state set <P> done');
+    if (iv < 0 || id < 0 || iv > id) fail(s.path + ': LOOP must call forge-state verify before forge-state set <P> done');
+    const fi = text.indexOf("If it reports `finished: true`");
+    const fin = text.slice(fi, fi + 400);
+    for (const w of ['`action`', '`ref`', 'STOP']) if (fi < 0 || !fin.includes(w)) fail(s.path + ': finished stop must mention ' + w);
+  }
+  for (const m of s.absent || []) {
+    if (text.includes(m)) fail(`${s.path}: superseded text must be absent: "${m}"`);
   }
 }
 
