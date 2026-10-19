@@ -12,3 +12,6 @@
   - review blocker fixed: unknown-phase test could no longer fail once the gate refused first.
   - nits: `forced` kept on non-done statuses; `--reason` swallows a following `--flag`; empty-repo refusal says "not a git work tree"; refusal after failed verify says "verified none".
   - for P8 (reviewer): SKILL.md crash-recovery `set P<n> done` and LOOP lack verify -> refused under the gate; parallel.md step 6 sets done after each merge, but merged tree != per-worktree verified snapshot -> P8 must make the post-merge full-suite check a `forge-state verify` on the run branch.
+- P4 done (iter 1 -> green after review, junior/heavy, AC-3.1 AC-3.2 AC-3.5): reconcile, finish (marker in git common dir + [meta] line), preflight, finished in seed/next. 59 git tests.
+  - review blockers fixed: reconcile counted a merged EARLIER plan's `P<n>:` commits -> now name-scoped (`P<n>: <name>` exact or `<name> ` prefix; narrower than AC-3.1/I1 wording, recorded divergence); preflight ignored default on_complete=pr.
+  - nits: earlier-plan names that extend the new name (`P1: core utils` vs phase `core`) still collide; reconcile in a commit-less repo says "needs a git work tree"; no test for finished-from-meta-line-only (probe confirms it works).

@@ -6,7 +6,7 @@
 //
 // Usage:
 //   node forge-state.mjs lint     <plan-file> [--prd <prd-file>]
-//   node forge-state.mjs seed     <plan-file>
+//   node forge-state.mjs seed     <plan-file> [--holder <id>]   (takes the run lock; default holder anonymous)
 //   node forge-state.mjs next     <plan-file> [--all]
 //   node forge-state.mjs set      <plan-file> <P-id> <status> [--force --reason "<text>"]
 //   node forge-state.mjs red      <plan-file> <P-id>
@@ -17,6 +17,8 @@
 //   node forge-state.mjs reconcile <plan-file>
 //   node forge-state.mjs finish   <plan-file> --action pr|merge|keep [--ref <url-or-sha>]
 //   node forge-state.mjs preflight <plan-file>
+// Run lock: <git-common-dir>/forge/plan-NNN.lock.json; mutating commands refresh its heartbeat,
+// a lock idle >= 120 min is taken over. FORGE_STATE_NOW (ISO 8601) overrides the clock, tests only.
 // Common flags: --state <path> (alias --todo; default docs/forge/runs/<plan>.state.md),
 //               --context-todo <path> (scaffold's todo.md; default docs/context/todo.md).
 //
@@ -39,7 +41,7 @@
 // All commands print JSON to stdout (ASCII-only). Errors go to stderr with exit 1;
 // `lint` also exits 1 when the plan has errors, listing them in its JSON.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { snapshotWorktree, snapshotHead, diffSnapshots, runGates, findUntestedAcs, gitCommonDir, phaseCommitList, hasRemote } from './forge-git.mjs';
 
@@ -87,6 +89,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--force') args.force = true;
     else if (argv[i] === '--action') args.action = argv[++i];
     else if (argv[i] === '--ref') args.ref = argv[++i];
+    else if (argv[i] === '--holder') args.holder = argv[i + 1]?.startsWith('--') ? '' : argv[++i];
     else if (argv[i] === '--reason') args.reason = argv[++i];
     else args.rest.push(argv[i]);
   }
@@ -434,12 +437,68 @@ function effective(phase, entries) {
 // --- finished record (spec-002 I2/I3, D9/D10): marker in the git common dir + [meta] line ---
 
 const metaRe = id => new RegExp('^- \\[meta\\] ' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' finished: action=(\\S+) ref=(\\S*) at=(\\S+)$');
-const nowIso = () => process.env.FORGE_STATE_NOW || new Date().toISOString();
+function nowIso() {
+  const v = process.env.FORGE_STATE_NOW;
+  if (v === undefined || v === '') return new Date().toISOString();
+  if (!Number.isFinite(Date.parse(v))) fail('FORGE_STATE_NOW is not a valid ISO 8601 timestamp: ' + v);
+  return v;
+}
 
 // Marker path, or null outside a git work tree.
 function markerPath(id) {
   try { return join(gitCommonDir(process.cwd()), 'forge', id + '.finished.json'); }
   catch { return null; }
+}
+
+// --- run lock (spec-002 I3, D9/D11-D13): single driver, heartbeat refreshed by mutating commands ---
+
+const STALE_MIN = 120;
+const lockPaths = new Map();
+function lockPath(id) {
+  if (!lockPaths.has(id)) { const mp = markerPath(id); lockPaths.set(id, mp && mp.replace(/\.finished\.json$/, '.lock.json')); }
+  return lockPaths.get(id);
+}
+// null: no lock file. { corrupt: true }: file present but not a lock. Else the lock.
+function readLock(id) {
+  const lp = lockPath(id);
+  if (!lp || !existsSync(lp)) return null;
+  try { const j = JSON.parse(readFileSync(lp, 'utf8')); return j && typeof j.holder === 'string' ? j : { corrupt: true }; }
+  catch { return { corrupt: true }; }
+}
+// Refresh the heartbeat when a lock file exists; never creates one.
+function heartbeat(id) {
+  const lock = readLock(id);
+  if (lock && !lock.corrupt) writeText(lockPath(id), JSON.stringify({ ...lock, heartbeat_at: nowIso() }) + '\n');
+}
+function releaseLock(id) {
+  const lp = lockPath(id);
+  if (lp && existsSync(lp)) rmSync(lp, { force: true });
+}
+// Take the lock for `holder`; refuses (exit 1) while another holder is fresh.
+// A lock whose heartbeat does not parse (or a corrupt lock file) counts as stale.
+// Returns takeover info when a stale/corrupt lock of another holder was replaced.
+function acquireLock(id, holder) {
+  const lp = lockPath(id);
+  if (!lp) return null;
+  const now = nowIso();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const prev = readLock(id);
+    let takeover = null;
+    if (prev?.corrupt) takeover = { lock_takeover: true, previous_holder: null };
+    else if (prev && prev.holder !== holder) {
+      const age = Math.floor((Date.parse(now) - Date.parse(prev.heartbeat_at)) / 60000);
+      if (Number.isFinite(age) && age < STALE_MIN)
+        fail(`${id} is driven by ${prev.holder} (heartbeat ${prev.heartbeat_at}, ${age} min ago); stop, or wait until it is stale (${STALE_MIN} min)`);
+      takeover = { lock_takeover: true, previous_holder: prev.holder, previous_heartbeat: prev.heartbeat_at };
+    }
+    const same = prev && !prev.corrupt && prev.holder === holder;
+    const text = JSON.stringify({ holder, acquired_at: same ? prev.acquired_at : now, heartbeat_at: now, run_root: process.cwd() }) + '\n';
+    if (prev) { writeText(lp, text); return takeover; }
+    // No lock yet: create exclusively so two racing seeds cannot both win.
+    try { mkdirSync(dirname(lp), { recursive: true }); writeFileSync(lp, text, { flag: 'wx' }); return null; }
+    catch (e) { if (e.code !== 'EEXIST') throw e; }
+  }
+  fail(`${id}: could not acquire the run lock (contended)`);
 }
 
 // {action, ref, at} when EITHER the marker file or the meta line says finished.
@@ -513,6 +572,7 @@ if (cmd === 'lint') {
   if (done0) { print({ plan: planId, finished: true, ...done0 }); process.exit(0); }
   const { graph } = lint(plan, null);
   if (graph.length) fail(`plan failed lint, nothing seeded: ${graph.join('; ')}`);
+  const takeover = acquireLock(planId, args.holder?.trim() || 'anonymous');
   let migrated = 0;
   if (!ctxIsState && parseEntries(readText(statePath), planId).size === 0 && existsSync(ctxPath)) {
     const legacy = planLines(readText(ctxPath), planId);
@@ -528,11 +588,11 @@ if (cmd === 'lint') {
     // A re-invocation after the run ended (e.g. /loop) must not reopen the pointer.
     if (finished) dropPointer(); else ensurePointer();
     print({ plan: planId, seeded: 0, resume: true, existing: existing.size, all_terminal: finished,
-      in_flight: inFlight(phases, existing), missing: missing(phases, existing), finished: false, ...(migrated && { migrated }) });
+      in_flight: inFlight(phases, existing), missing: missing(phases, existing), finished: false, ...(migrated && { migrated }), ...takeover });
   } else {
     appendLines(statePath, phases.map(p => `- [pending] ${planId} ${p.id}: ${p.name}`));
     ensurePointer();
-    print({ plan: planId, seeded: phases.length, resume: false, finished: false });
+    print({ plan: planId, seeded: phases.length, resume: false, finished: false, ...takeover });
   }
 } else if (cmd === 'next') {
   const entries = loadEntries();
@@ -608,7 +668,7 @@ if (cmd === 'lint') {
     }
   }
   const terminal = allTerminal(phases, parseEntries(readText(statePath), planId));
-  if (terminal) dropPointer();
+  if (terminal) { dropPointer(); releaseLock(planId); } else heartbeat(planId);
   print({ plan: planId, phase: phaseId, status, cascaded_blocked_upstream: cascaded, all_terminal: terminal,
     ...(forced && { forced: true, reason: args.reason.trim() }) });
 } else if (cmd === 'red') {
@@ -627,6 +687,7 @@ if (cmd === 'lint') {
     else if (phase.process === 'light') { decision = 'escalate'; bump = { process: 'heavy' }; }
     else decision = 'block';
   }
+  heartbeat(planId);
   print({ plan: planId, phase: phaseId, iter, K, decision, ...(bump && { bump }) });
 } else if (cmd === 'escalate') {
   const [phaseId] = cmdArgs;
@@ -646,11 +707,13 @@ if (cmd === 'lint') {
   let merged;
   // A bump starts a fresh K window: iter resets to 0.
   rewriteEntry(statePath, planId, phaseId, cur => ({ ...cur, override: (merged = { ...cur.override, ...add }), iter: 0 }));
+  heartbeat(planId);
   print({ plan: planId, phase: phaseId, escalated: merged });
 } else if (cmd === 'recover') {
   const entries = loadEntries();
   const recovered = inFlight(phases, entries);
   for (const id of recovered) rewriteEntry(statePath, planId, id, cur => ({ ...cur, status: 'pending' }));
+  heartbeat(planId);
   print({ plan: planId, recovered });
 } else if (cmd === 'status') {
   const entries = loadEntries();
@@ -685,6 +748,7 @@ if (cmd === 'lint') {
   const result = runGates(gates, cwd);
   const pass = result.exit_code === 0 && untested.length === 0;
   rewriteEntry(statePath, planId, phaseId, cur => ({ ...cur, verify: `${pass ? 'pass' : 'fail'}:${snapshot}` }));
+  heartbeat(planId);
   print({ plan: planId, phase: phaseId, snapshot, gates, shell: result.shell, exit_code: result.exit_code,
     untested_acs: untested, pass, tail: result.tail });
 } else if (cmd === 'reconcile') {
@@ -703,6 +767,7 @@ if (cmd === 'lint') {
     reconciled.push(p.id);
   }
   if (allTerminal(phases, parseEntries(readText(statePath), planId))) dropPointer();
+  heartbeat(planId);
   print({ plan: planId, reconciled, unchanged });
 } else if (cmd === 'finish') {
   if (!['pr', 'merge', 'keep'].includes(args.action)) fail('usage: forge-state.mjs finish <plan-file> --action pr|merge|keep [--ref <url-or-sha-or-branch>]');
@@ -715,6 +780,7 @@ if (cmd === 'lint') {
   if (mp) writeText(mp, JSON.stringify(rec) + '\n');
   appendLines(statePath, [`- [meta] ${planId} finished: action=${rec.action} ref=${rec.ref} at=${rec.at}`]);
   dropPointer();
+  releaseLock(planId);
   print({ plan: planId, finished: rec });
 } else if (cmd === 'preflight') {
   const errors = [];

@@ -6,7 +6,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -719,4 +719,173 @@ test('AC-3.2 seed reports finished before linting the plan', () => {
   write(PLAN_PATH, MULTI.replace('depends_on: P1', 'depends_on: P99'));
   const s = cliJson(['seed', PLAN_PATH]);
   assert.equal(s.finished, true);
+});
+
+// --- AC-3.4: single-driver run lock with heartbeat ---
+
+const T0 = Date.parse('2026-10-18T12:00:00.000Z');
+const minAt = m => new Date(T0 + m * 60000).toISOString();
+const lockFile = () => join(git('rev-parse', '--path-format=absolute', '--git-common-dir'), 'forge', 'plan-007.lock.json');
+const lockJson = () => JSON.parse(readFileSync(lockFile(), 'utf8'));
+const runAt = (m, args) => execFileSync(process.execPath, [SCRIPT, ...args, '--state', STATE_PATH], {
+  cwd: repo, env: { ...ENV, FORGE_STATE_NOW: minAt(m) }, encoding: 'utf8', stdio: 'pipe' });
+const jsonAt = (m, args) => JSON.parse(runAt(m, args));
+function failAt(m, args) {
+  try { runAt(m, args); } catch (e) { return { code: e.status, stdout: e.stdout, stderr: e.stderr }; }
+  assert.fail(`expected non-zero exit for: ${args.join(' ')}`);
+}
+const seedAs = (m, holder) => jsonAt(m, ['seed', PLAN_PATH, '--holder', holder]);
+
+test('AC-3.4 fresh lock of holder A refuses B naming A and the heartbeat; A re-seeds ok; refusal leaves lock untouched', () => {
+  write(PLAN_PATH, MULTI);
+  const a = seedAs(0, 'A');
+  assert.equal(a.seeded, 3);
+  assert.equal(a.lock_takeover, undefined);
+  assert.deepEqual(lockJson(), { holder: 'A', acquired_at: minAt(0), heartbeat_at: minAt(0), run_root: lockJson().run_root });
+  const before = readFileSync(lockFile(), 'utf8');
+  const stateBefore = stateText();
+  const f = failAt(60, ['seed', PLAN_PATH, '--holder', 'B']);
+  assert.equal(f.code, 1);
+  assert.ok(f.stderr.includes(`plan-007 is driven by A (heartbeat ${minAt(0)}, 60 min ago); stop, or wait until it is stale (120 min)`), f.stderr);
+  assert.equal(readFileSync(lockFile(), 'utf8'), before);
+  assert.equal(stateText(), stateBefore);
+  const again = seedAs(61, 'A');
+  assert.equal(again.resume, true);
+  assert.equal(again.lock_takeover, undefined);
+  assert.equal(lockJson().heartbeat_at, minAt(61));
+  assert.equal(lockJson().acquired_at, minAt(0));
+});
+
+test('AC-3.4 stale lock is taken over by B and the JSON reports the previous holder and heartbeat', () => {
+  write(PLAN_PATH, MULTI);
+  seedAs(0, 'A');
+  const b = seedAs(121, 'B');
+  assert.equal(b.lock_takeover, true);
+  assert.equal(b.previous_holder, 'A');
+  assert.equal(b.previous_heartbeat, minAt(0));
+  assert.equal(lockJson().holder, 'B');
+  assert.equal(lockJson().acquired_at, minAt(121));
+  assert.equal(failAt(130, ['seed', PLAN_PATH, '--holder', 'A']).code, 1);
+});
+
+test('AC-3.4 a mutating command refreshes the heartbeat so a would-be-stale lock stays fresh', () => {
+  write(PLAN_PATH, MULTI);
+  seedAs(0, 'A');
+  runAt(100, ['set', PLAN_PATH, 'P1', 'in_progress']);
+  assert.equal(lockJson().heartbeat_at, minAt(100));
+  const f = failAt(150, ['seed', PLAN_PATH, '--holder', 'B']);
+  assert.match(f.stderr, /driven by A .* 50 min ago/);
+  runAt(160, ['recover', PLAN_PATH]);
+  assert.equal(lockJson().heartbeat_at, minAt(160));
+  runAt(170, ['reconcile', PLAN_PATH]);
+  assert.equal(lockJson().heartbeat_at, minAt(170));
+});
+
+test('AC-3.4 read-only commands neither refresh nor create the lock', () => {
+  write(PLAN_PATH, MULTI);
+  seedAs(0, 'A');
+  for (const c of ['next', 'status', 'lint', 'preflight']) {
+    try { runAt(100, [c, PLAN_PATH]); } catch { /* preflight may exit 1 */ }
+  }
+  assert.equal(lockJson().heartbeat_at, minAt(0));
+  assert.equal(seedAs(121, 'B').lock_takeover, true);
+});
+
+test('AC-3.4 lock is released when every phase is terminal, and on finish', () => {
+  write(PLAN_PATH, MULTI);
+  seedAs(0, 'A');
+  for (const p of ['P1', 'P2']) runAt(1, ['set', PLAN_PATH, p, 'done', '--force', '--reason', 'no code']);
+  assert.ok(existsSync(lockFile()));
+  runAt(2, ['set', PLAN_PATH, 'P10', 'done', '--force', '--reason', 'no code']);
+  assert.equal(existsSync(lockFile()), false);
+  rmSync(join(repo, STATE_PATH));
+  seedAs(3, 'A');
+  assert.ok(existsSync(lockFile()));
+  runAt(4, ['finish', PLAN_PATH, '--action', 'keep']);
+  assert.equal(existsSync(lockFile()), false);
+});
+
+test('AC-3.4 seed without --holder uses "anonymous"; positional parsing is unaffected', () => {
+  write(PLAN_PATH, MULTI);
+  jsonAt(0, ['seed', '--holder', 'A', PLAN_PATH]);
+  assert.equal(lockJson().holder, 'A');
+  rmSync(lockFile());
+  jsonAt(0, ['seed', PLAN_PATH]);
+  assert.equal(lockJson().holder, 'anonymous');
+});
+
+// --- AC-3.4 hardening: corrupt locks, bad clock, holder values, no-create, more refreshers ---
+
+const putLock = obj => { mkdirSync(dirname(lockFile()), { recursive: true }); writeFileSync(lockFile(), typeof obj === 'string' ? obj : JSON.stringify(obj)); };
+
+test('AC-3.4 a lock without a parseable heartbeat counts as stale and is taken over', () => {
+  write(PLAN_PATH, MULTI);
+  putLock({ holder: 'A', acquired_at: minAt(0) });
+  const b = seedAs(1, 'B');
+  assert.equal(b.lock_takeover, true);
+  assert.equal(b.previous_holder, 'A');
+  assert.equal(lockJson().holder, 'B');
+  putLock({ holder: 'A', acquired_at: minAt(0), heartbeat_at: 'garbage' });
+  assert.equal(seedAs(2, 'C').lock_takeover, true);
+});
+
+test('AC-3.4 an unparseable lock.json is reported as a takeover with previous_holder null', () => {
+  write(PLAN_PATH, MULTI);
+  putLock('{not json');
+  const b = seedAs(0, 'B');
+  assert.equal(b.lock_takeover, true);
+  assert.equal(b.previous_holder, null);
+  assert.equal(lockJson().holder, 'B');
+});
+
+test('AC-3.4 an unparseable FORGE_STATE_NOW exits 1 and writes no lock', () => {
+  write(PLAN_PATH, MULTI);
+  try {
+    execFileSync(process.execPath, [SCRIPT, 'seed', PLAN_PATH, '--holder', 'A', '--state', STATE_PATH], {
+      cwd: repo, env: { ...ENV, FORGE_STATE_NOW: 'garbage' }, encoding: 'utf8', stdio: 'pipe' });
+    assert.fail('expected exit 1');
+  } catch (e) {
+    assert.equal(e.status, 1);
+    assert.match(e.stderr, /FORGE_STATE_NOW/);
+  }
+  assert.equal(existsSync(lockFile()), false);
+});
+
+test('AC-3.4 an empty or missing --holder value means anonymous', () => {
+  write(PLAN_PATH, MULTI);
+  jsonAt(0, ['seed', PLAN_PATH, '--holder', '']);
+  assert.equal(lockJson().holder, 'anonymous');
+  rmSync(lockFile());
+  runAt(0, ['seed', PLAN_PATH, '--holder']);
+  assert.equal(lockJson().holder, 'anonymous');
+});
+
+test('AC-3.4 lock records the real repo root as run_root', () => {
+  write(PLAN_PATH, MULTI);
+  seedAs(0, 'A');
+  assert.equal(realpathSync.native(lockJson().run_root), realpathSync.native(git('rev-parse', '--show-toplevel')));
+});
+
+test('AC-3.4 no command creates a lock when none exists (read-only and heartbeat)', () => {
+  write(PLAN_PATH, MULTI);
+  seedAs(0, 'A');
+  rmSync(lockFile());
+  for (const c of ['next', 'status', 'lint', 'preflight']) {
+    try { runAt(5, [c, PLAN_PATH]); } catch { /* preflight may exit 1 */ }
+  }
+  assert.equal(existsSync(lockFile()), false);
+  runAt(6, ['set', PLAN_PATH, 'P1', 'in_progress']);
+  runAt(6, ['red', PLAN_PATH, 'P1']);
+  assert.equal(existsSync(lockFile()), false);
+});
+
+test('AC-3.4 red, escalate and verify refresh the heartbeat', () => {
+  write(PLAN_PATH, MULTI);
+  seedAs(0, 'A');
+  runAt(10, ['red', PLAN_PATH, 'P1']);
+  assert.equal(lockJson().heartbeat_at, minAt(10));
+  runAt(20, ['escalate', PLAN_PATH, 'P1', '--tier', 'senior']);
+  assert.equal(lockJson().heartbeat_at, minAt(20));
+  runAt(30, ['verify', PLAN_PATH, 'P1']);
+  assert.equal(lockJson().heartbeat_at, minAt(30));
 });
