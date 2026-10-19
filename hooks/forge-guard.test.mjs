@@ -25,6 +25,12 @@ const DENIED_PATHS = [
   ['Edit', { file_path: '.\\docs\\context\\lessons.md' }, 'lessons.md'],
   ['NotebookEdit', { notebook_path: 'C:\\repo\\docs\\forge\\nb.ipynb' }, 'nb.ipynb'],
   ['Write', { file_path: 'docs/forge/' }, 'docs/forge/'],
+  // normalized before matching: ./ and // segments, .. that lands under docs/forge|context
+  ['Write', { file_path: 'docs/./forge/runs/x.state.md' }, 'docs/./forge/runs/x.state.md'],
+  ['Edit', { file_path: 'docs//context/todo.md' }, 'docs//context/todo.md'],
+  ['Edit', { file_path: 'src/../docs/context/lessons.md' }, 'src/../docs/context/lessons.md'],
+  ['Write', { file_path: 'C:\\repo\\docs\\.\\forge\\plans\\p.md' }, 'C:\\repo\\docs\\.\\forge\\plans\\p.md'],
+  ['Edit', { file_path: 'C:\\repo\\docs\\\\forge\\x.md' }, 'C:\\repo\\docs\\\\forge\\x.md'],
 ];
 for (const [tool_name, tool_input, shown] of DENIED_PATHS) {
   const p = tool_input.file_path ?? tool_input.notebook_path;
@@ -43,6 +49,7 @@ const ALLOWED_PATHS = [
   ['Edit', { file_path: 'C:\\repo\\src\\docs\\forge-notes.md' }],
   ['Write', { file_path: 'docs/contexts/a.md' }],
   ['Edit', { file_path: 'hooks/forge-guard.mjs' }],
+  ['Edit', { file_path: 'docs/forge/../src/a.md' }],
   ['NotebookEdit', { notebook_path: 'notebooks/a.ipynb' }],
   ['Read', { file_path: 'docs/forge/runs/x.state.md' }],
 ];
@@ -69,6 +76,16 @@ test('AC-1.2 stdin wrapper: non-ASCII path is escaped (ASCII-only stdout, JSON r
   assert.equal(r.status, 0);
   assert.match(r.stdout, /^[\x00-\x7f]+$/, 'stdout must be ASCII-only');
   assert.ok(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason.includes(file_path));
+});
+
+test('AC-1.2 stdin wrapper: multibyte characters split across stdin chunks survive', () => {
+  // ~300 KB of 3-byte UTF-8 characters spans several pipe chunks, so some chunk
+  // boundary falls inside a character; decoding chunk by chunk would mangle it.
+  const file_path = 'docs/forge/' + String.fromCharCode(0x2192).repeat(100000) + '.md';
+  const r = run(JSON.stringify(hookInput({ tool_name: 'Write', tool_input: { file_path, content: 'x' } })));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^[\x00-\x7f]+$/, 'stdout must be ASCII-only');
+  assert.ok(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason.includes(file_path), 'path must round-trip intact');
 });
 
 test('AC-1.2 forge agent_type variants are all guarded', () => {
@@ -145,6 +162,83 @@ test('AC-1.3 deny reason names the git subcommand', () => {
   assert.ok(bash('cd x && git pull').reason.includes('git pull'));
 });
 
+// ---------- AC-1.3: PowerShell mutating git / forge-state ----------
+// Same rule as Bash. Separators: ; | && || (PS7) & newline $( ; `& <path>` is the
+// call operator. Backtick is the escape character (not command substitution):
+// a line continuation joins lines and an escaped character stands for itself.
+
+const ps = (command) => decide(hookInput({ tool_name: 'PowerShell', tool_input: { command } }));
+
+const PS_DENIED_CMDS = [
+  ...MUTATING.map((s) => `git ${s}`),
+  'git commit -am x; git push',
+  'Set-Location x; git pull',
+  'cd x && git push',
+  'npm test || git restore .',
+  'Get-ChildItem | git add -A',
+  "& 'C:\\Program Files\\Git\\cmd\\git.exe' push",
+  '& "C:\\Program Files\\Git\\cmd\\git.exe" commit -m x',
+  '& "$env:ProgramFiles\\Git\\cmd\\git.exe" push origin',
+  '&git checkout -b probe',
+  'git.exe stash',
+  'GIT.EXE push',
+  'git -C x checkout main',
+  'git --% push',
+  'git push 2>&1',
+  'git `\n  commit -m x',
+  'git -C x `\r\n  push origin',
+  'g`it push',
+  'git pu`sh',
+  '$(git branch -D y)',
+  '@(git stash)',
+  'Start-Job { git push }',
+  'if ($ok) { git commit -m wip }',
+  'git commit -m "fix: thing"',
+  "git commit -m @'\nmsg\n'@",
+  'Write-Output hi\ngit add -A',
+  'node .\\skills\\forge-run\\scripts\\forge-state.mjs set plan.md P1 done',
+  "& node 'C:\\x\\forge-state.mjs' next plan.md",
+];
+for (const cmd of PS_DENIED_CMDS) {
+  test(`AC-1.3 PowerShell deny: ${JSON.stringify(cmd)}`, () => {
+    const d = ps(cmd);
+    assert.ok(d, 'expected a deny decision');
+    assert.match(d.reason, /^forge-guard: .*orchestrator-owned/);
+  });
+}
+
+const PS_ALLOWED_CMDS = [
+  ...['status', 'diff', 'log', 'show', 'rev-parse', 'ls-files', 'blame'].map((s) => `git ${s}`),
+  'git -C x status --short',
+  'git --no-pager log --oneline -3',
+  'git diff `\n  --stat',
+  'git log --format="%h `"%s`"" -3',
+  'Write-Output "git push"',
+  "Write-Output 'git commit -m x'",
+  'Select-String -Pattern git -Path src\\*.js',
+  'node --test skills/forge-run/scripts/forge-state.test.mjs',
+  'node validate.mjs',
+  'Get-ChildItem hooks',
+];
+for (const cmd of PS_ALLOWED_CMDS) {
+  test(`AC-1.3 PowerShell allow (no decision): ${JSON.stringify(cmd)}`, () => {
+    assert.equal(ps(cmd), null);
+  });
+}
+
+test('AC-1.3 PowerShell deny reason names the git subcommand', () => {
+  assert.ok(ps("& 'C:\\Program Files\\Git\\cmd\\git.exe' push").reason.includes('git push'));
+  assert.ok(ps('git `\n  commit -m x').reason.includes('git commit'));
+});
+
+test('AC-1.3 PowerShell stdin wrapper prints the PreToolUse deny JSON', () => {
+  const r = run(JSON.stringify(hookInput({ tool_name: 'PowerShell', tool_input: { command: 'git commit -am x; git push' } })));
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny');
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /forge-guard: running git commit .*orchestrator-owned/);
+});
+
 // ---------- AC-1.4: main session / non-forge agent_type -> silent ----------
 
 const NOT_FORGE = [
@@ -155,6 +249,7 @@ const NOT_FORGE = [
 const GUARDED_INPUTS = [
   ...DENIED_PATHS.map(([tool_name, tool_input]) => ({ tool_name, tool_input })),
   ...DENIED_CMDS.map((command) => ({ tool_name: 'Bash', tool_input: { command } })),
+  ...PS_DENIED_CMDS.map((command) => ({ tool_name: 'PowerShell', tool_input: { command } })),
 ];
 for (const [label, agent_type] of NOT_FORGE) {
   test(`AC-1.4 agent_type ${label}: decide is null for every guarded input`, () => {
@@ -167,7 +262,11 @@ for (const [label, agent_type] of NOT_FORGE) {
 }
 
 test('AC-1.4 stdin wrapper: main session and non-forge agent exit 0 with empty stdout', () => {
-  const samples = [GUARDED_INPUTS[0], { tool_name: 'Bash', tool_input: { command: 'cd x && git pull' } }];
+  const samples = [
+    GUARDED_INPUTS[0],
+    { tool_name: 'Bash', tool_input: { command: 'cd x && git pull' } },
+    { tool_name: 'PowerShell', tool_input: { command: "git commit -am x; & 'C:\\Program Files\\Git\\cmd\\git.exe' push" } },
+  ];
   for (const over of samples) {
     const main = hookInput(over);
     delete main.agent_type;
@@ -189,6 +288,7 @@ const FAIL_OPEN = [
   ['non-ASCII malformed JSON', '{"file_path": "docs/forge/caf\u00e9\u2192'],
   ['JSON null', 'null'],
   ['internal error: Bash command not a string', JSON.stringify(hookInput({ tool_name: 'Bash', tool_input: { command: 42 } }))],
+  ['internal error: PowerShell command not a string', JSON.stringify(hookInput({ tool_name: 'PowerShell', tool_input: { command: 42 } }))],
   ['internal error: tool_input null', JSON.stringify(hookInput({ tool_name: 'Edit', tool_input: null }))],
 ];
 for (const [label, stdin] of FAIL_OPEN) {
