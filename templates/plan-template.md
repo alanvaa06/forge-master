@@ -6,6 +6,7 @@
 - mode: autonomous            # autonomous = never pauses mid-run | attended = pauses only before escalations, on blocks, and to confirm the finish action
 - branch: forge/NNN-<slug>
 - isolation: worktree         # worktree = run in a sibling git worktree, primary dir + your editor untouched (default; required for safe concurrent work) | in-place = checkout the run branch in the current dir (only when this is the sole session on the repo)
+- gates: <cmd>                # REQUIRED. One bash command the loop runs as every phase's gate; must cover everything CI runs (e.g. npm test && npx tsc --noEmit)
 - K: 3                        # max consecutive red iterations per phase before escalate-or-block
 - phase_budget: <tokens>      # raw integer, no separators (gate card shows commas); soft early-escalation signal, not a hard kill
 - run_budget: <tokens>        # raw integer, no separators (gate card shows commas); global cap, on exhaustion stop cleanly with report

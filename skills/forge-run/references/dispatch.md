@@ -4,6 +4,10 @@ Loaded by `forge-run` whenever it spawns an implementer subagent (heavy phases a
 
 ## Dispatch prompt template
 
+Implementers are dispatched with `subagent_type` `forge-master:forge-implementer-<tier>` (`junior` or `senior`, from `forge-state next`). If the scoped name is rejected, retry with the bare name `forge-implementer-<tier>`.
+
+The orchestrator owns every commit and every state write, including commits inside parallel phase worktrees. Implementers run no mutating git and never write `docs/forge/**` or `docs/context/**`; they report needs in their final message instead of acting.
+
 Every implementer subagent receives EXACTLY this, nothing more:
 
 1. Its phase section from the plan, verbatim (covers, depends_on, tier, process, success, notes).
@@ -11,7 +15,8 @@ Every implementer subagent receives EXACTLY this, nothing more:
 3. The spec sections the phase's notes cite (Interfaces and File Map rows only), when a spec exists.
 4. Relevant lessons from `docs/context/lessons.md` and the full `docs/context/memory.md`.
 5. For heavy phases: the TDD Iron Law (`references/tdd.md`), to be followed per covered AC.
-6. The report contract below, stated as mandatory.
+6. The run root (or its phase worktree) path as its working directory.
+7. The report contract below, stated as mandatory.
 
 Never the run history, never other phases' sections, never the whole spec.
 
@@ -28,7 +33,7 @@ The subagent's final message MUST contain:
 - **tests:** which covered-AC tests exist, named by AC ID, and their final state.
 - **notes:** anything the orchestrator must know (max 3 lines).
 
-A report without a signal is treated as stuck.
+A report without a signal is treated as stuck (implementers only; the reviewer's contract is in `code-review.md`).
 
 ## Freshness policy
 

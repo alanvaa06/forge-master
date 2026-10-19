@@ -1,0 +1,10 @@
+- [done] plan-002 P1: plan contract lint + test-suite wiring
+- [done] plan-002 P2: forge-git helpers + verify {iter=1}
+- [done] plan-002 P3: evidence-gated set done {iter=1}
+- [done] plan-002 P4: reconcile, finish, preflight {iter=1}
+- [done] plan-002 P5: run lock with heartbeat {iter=1}
+- [done] plan-002 P6: forge-guard PreToolUse hook
+- [done] plan-002 P7: plugin agent definitions {iter=1}
+- [done] plan-002 P8: skill prose integration {iter=1}
+- [done] plan-002 P9: release docs + live checks
+- [meta] plan-002 finished: action=pr ref=https://github.com/alanvaa06/forge-master/pull/3 at=2026-10-19T02:32:42.634Z

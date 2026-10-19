@@ -14,6 +14,7 @@ const PLAN = `# Plan-007: demo  (PRD: docs/forge/prd/007-demo.md)
 ## Run Config
 - mode: autonomous
 - branch: forge/007-demo
+- gates: node --test
 - K: 3
 
 ## Phases
@@ -157,8 +158,8 @@ test('set updates status; done unlocks dependents', () => {
   runJson(['seed', planPath]);
   runJson(['set', planPath, 'P1', 'in_progress']);
   assert.match(state(), /- \[in_progress\] plan-007 P1:/);
-  runJson(['set', planPath, 'P1', 'done']);
-  runJson(['set', planPath, 'P4', 'done']);
+  runJson(['set', planPath, 'P1', 'done', '--force', '--reason', 'fixture']);
+  runJson(['set', planPath, 'P4', 'done', '--force', '--reason', 'fixture']);
   const out = runJson(['next', planPath]);
   assert.equal(out.phase.id, 'P2');
 });
@@ -184,7 +185,7 @@ test('set plan-stale cascades like blocked', () => {
 
 test('next reports terminal state when nothing remains', () => {
   runJson(['seed', planPath]);
-  for (const p of ['P1', 'P2', 'P3', 'P4']) runJson(['set', planPath, p, 'done']);
+  for (const p of ['P1', 'P2', 'P3', 'P4']) runJson(['set', planPath, p, 'done', '--force', '--reason', 'fixture']);
   const out = runJson(['next', planPath]);
   assert.equal(out.phase, null);
   assert.equal(out.all_terminal, true);
@@ -193,7 +194,7 @@ test('next reports terminal state when nothing remains', () => {
 test('next distinguishes stuck graph from finished graph', () => {
   runJson(['seed', planPath]);
   runJson(['set', planPath, 'P1', 'blocked']);
-  runJson(['set', planPath, 'P4', 'done']);
+  runJson(['set', planPath, 'P4', 'done', '--force', '--reason', 'fixture']);
   const out = runJson(['next', planPath]);
   assert.equal(out.phase, null);
   assert.equal(out.all_terminal, true); // blocked/blocked-upstream are terminal
@@ -202,7 +203,7 @@ test('next distinguishes stuck graph from finished graph', () => {
 
 test('status reports counts and all_terminal', () => {
   runJson(['seed', planPath]);
-  runJson(['set', planPath, 'P1', 'done']);
+  runJson(['set', planPath, 'P1', 'done', '--force', '--reason', 'fixture']);
   const out = runJson(['status', planPath]);
   assert.equal(out.counts.done, 1);
   assert.equal(out.counts.pending, 3);
@@ -217,7 +218,10 @@ test('invalid status rejected with non-zero exit', () => {
 
 test('set on unknown phase rejected with non-zero exit', () => {
   runJson(['seed', planPath]);
-  assert.throws(() => run(['set', planPath, 'P9', 'done'], { stdio: 'pipe' }));
+  // --force so the evidence gate cannot be what refuses: only the unknown-phase check can.
+  const r = runFail(['set', planPath, 'P9', 'done', '--force', '--reason', 'fixture']);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /P9 is not in the plan plan-007/);
 });
 
 test('in_progress-parallel accepted as batch status', () => {
@@ -275,8 +279,8 @@ test('escalate preserves the current status', () => {
 test('set status change preserves an existing escalated suffix', () => {
   runJson(['seed', planPath]);
   runJson(['escalate', planPath, 'P1', '--tier', 'senior', '--process', 'heavy']);
-  runJson(['set', planPath, 'P1', 'done']);
-  assert.match(state(), /- \[done\] plan-007 P1: setup harness \{tier=senior process=heavy\}/);
+  runJson(['set', planPath, 'P1', 'done', '--force', '--reason', 'fixture']);
+  assert.match(state(), /- \[done\] plan-007 P1: setup harness \{tier=senior process=heavy forced\}/);
 });
 
 test('escalated suffix survives a blocked-upstream cascade on dependents', () => {
@@ -442,7 +446,7 @@ test('backticked dependency ids are parsed', () => {
   writePlan(twoPhase('`P1`'));
   runJson(['seed', planPath]);
   assert.deepEqual(runJson(['next', planPath, '--all']).phases.map(p => p.id), ['P1']);
-  runJson(['set', planPath, 'P1', 'done']);
+  runJson(['set', planPath, 'P1', 'done', '--force', '--reason', 'fixture']);
   assert.equal(runJson(['next', planPath]).phase.id, 'P2'); // dep resolves to P1, not "`P1`"
 });
 
@@ -450,7 +454,7 @@ test('P0 is an ordinary plan phase', () => {
   writePlan(twoPhase('P0').replace('### P1: base', '### P0: setup test harness\n- covers: -\n- depends_on: -\n- tier: junior\n- process: light\n### P1: base'));
   runJson(['seed', planPath]);
   assert.equal(runJson(['next', planPath]).phase.id, 'P0');
-  runJson(['set', planPath, 'P0', 'done']);
+  runJson(['set', planPath, 'P0', 'done', '--force', '--reason', 'fixture']);
   assert.match(state(), /- \[done\] plan-007 P0: setup test harness/);
 });
 
@@ -601,9 +605,9 @@ test('pointer is removed once every phase is terminal', () => {
   writeFileSync(ctx, '# Todo\n- [ ] [pending] other work\n');
   runJson(['seed', planPath]);
   assert.match(readFileSync(ctx, 'utf8'), /forge run plan-007/);
-  for (const p of ['P1', 'P2', 'P3']) runJson(['set', planPath, p, 'done']);
+  for (const p of ['P1', 'P2', 'P3']) runJson(['set', planPath, p, 'done', '--force', '--reason', 'fixture']);
   assert.match(readFileSync(ctx, 'utf8'), /forge run plan-007/); // P4 still pending
-  runJson(['set', planPath, 'P4', 'done']);
+  runJson(['set', planPath, 'P4', 'done', '--force', '--reason', 'fixture']);
   const text = readFileSync(ctx, 'utf8');
   assert.doesNotMatch(text, /forge run plan-007/);
   assert.match(text, /other work/);
@@ -646,7 +650,7 @@ test('CRLF line endings in scaffold todo.md are preserved', () => {
 test('CRLF line endings in the state file are preserved on rewrite', () => {
   runJson(['seed', planPath]);
   writeFileSync(statePath, state().replace(/\n/g, '\r\n'));
-  runJson(['set', planPath, 'P1', 'done']);
+  runJson(['set', planPath, 'P1', 'done', '--force', '--reason', 'fixture']);
   assert.equal(/[^\r]\n/.test(state()), false, 'found a bare LF');
 });
 
@@ -672,7 +676,7 @@ test('seed on a finished run does not restore the todo.md pointer', () => {
   const ctx = join(dir, 'docs/context/todo.md');
   writeFileSync(ctx, '# Todo\n');
   runJson(['seed', planPath]);
-  for (const p of ['P1', 'P2', 'P3', 'P4']) runJson(['set', planPath, p, 'done']);
+  for (const p of ['P1', 'P2', 'P3', 'P4']) runJson(['set', planPath, p, 'done', '--force', '--reason', 'fixture']);
   runJson(['seed', planPath]); // e.g. a /loop re-invocation after the run ended
   assert.doesNotMatch(readFileSync(ctx, 'utf8'), /forge run plan-007/);
 });
@@ -705,7 +709,7 @@ const dropLine = re => writeFileSync(statePath, state().split('\n').filter(l => 
 
 test('a plan phase with no state entry is not terminal and is reported missing', () => {
   runJson(['seed', planPath]);
-  for (const p of ['P1', 'P2', 'P3']) runJson(['set', planPath, p, 'done']);
+  for (const p of ['P1', 'P2', 'P3']) runJson(['set', planPath, p, 'done', '--force', '--reason', 'fixture']);
   dropLine(/ P4: /);
   const out = runJson(['next', planPath]);
   assert.equal(out.phase, null);
@@ -718,7 +722,7 @@ test('a plan phase with no state entry is not terminal and is reported missing',
 test('set creates the entry for a plan phase that has none', () => {
   runJson(['seed', planPath]);
   dropLine(/ P1: /);
-  runJson(['set', planPath, 'P1', 'done']);
+  runJson(['set', planPath, 'P1', 'done', '--force', '--reason', 'fixture']);
   assert.match(state(), /- \[done\] plan-007 P1: setup harness/);
   assert.equal(runJson(['next', planPath]).phase.id, 'P2');
 });
@@ -774,6 +778,51 @@ test('phase names ending in braces keep them through rewrites', () => {
   writePlan(PLAN.replace('### P3: docs', '### P3: docs {beta}'));
   runJson(['seed', planPath]);
   runJson(['escalate', planPath, 'P3', '--tier', 'senior']);
-  runJson(['set', planPath, 'P3', 'done']);
-  assert.match(state(), /- \[done\] plan-007 P3: docs \{beta\} \{tier=senior\}/);
+  runJson(['set', planPath, 'P3', 'done', '--force', '--reason', 'fixture']);
+  assert.match(state(), /- \[done\] plan-007 P3: docs \{beta\} \{tier=senior forced\}/);
+});
+
+// --- AC-2.1 / AC-2.2: Run Config contract (gates + enums + budgets) ---
+
+test('AC-2.1 lint exits 1 naming gates when gates is missing', () => {
+  writePlan(PLAN.replace('- gates: node --test\n', ''));
+  const r = runFail(['lint', planPath]);
+  assert.ok(r.stdout.errors.some(e => /gates/.test(e)), JSON.stringify(r.stdout.errors));
+  assert.equal(r.stdout.graph_errors.length, 0);
+});
+
+test('AC-2.1 lint exits 1 naming gates when gates is empty or a placeholder', () => {
+  for (const v of ['', '<cmd>']) {
+    writePlan(PLAN.replace('- gates: node --test', `- gates: ${v}`));
+    const r = runFail(['lint', planPath]);
+    assert.ok(r.stdout.errors.some(e => /gates/.test(e)), JSON.stringify(r.stdout.errors));
+  }
+});
+
+test('AC-2.1 legacy plan without gates still seeds', () => {
+  writePlan(PLAN.replace('- gates: node --test\n', ''));
+  runJson(['seed', planPath]);
+});
+
+test('AC-2.1 plan-template.md has a gates: line', () => {
+  const tpl = readFileSync(join(dirname(SCRIPT), '..', '..', '..', 'templates', 'plan-template.md'), 'utf8');
+  assert.match(tpl, /^- gates:/m);
+});
+
+test('AC-2.1 lint passes with gates set', () => {
+  assert.equal(runJson(['lint', planPath]).ok, true);
+});
+
+test('AC-2.2 lint names each bad enum and budget key', () => {
+  const bad = PLAN.replace('- mode: autonomous', '- mode: yolo\n- isolation: moon\n- on_complete: ship\n- phase_budget: 1,000\n- run_budget: 0');
+  writePlan(bad);
+  const r = runFail(['lint', planPath]);
+  for (const k of ['mode', 'isolation', 'on_complete', 'phase_budget', 'run_budget'])
+    assert.ok(r.stdout.errors.some(e => e.includes(`Run Config ${k} must be`)), `${k}: ${JSON.stringify(r.stdout.errors)}`);
+  assert.equal(r.stdout.graph_errors.length, 0);
+});
+
+test('AC-2.2 valid enums and budgets pass lint', () => {
+  writePlan(PLAN.replace('- mode: autonomous', '- mode: attended\n- isolation: in-place\n- on_complete: keep\n- phase_budget: 50000\n- run_budget: 900000'));
+  assert.equal(runJson(['lint', planPath]).ok, true);
 });
