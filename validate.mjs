@@ -105,8 +105,10 @@ const SKILLS = [
       'forge-master:forge-implementer-', 'forge-master:forge-reviewer', '--reason',
       'ok: false', 'forge: finish plan-', 'git worktree add <path> forge/NNN-<slug>',
       'plan-NNN.lock.json', 'only for phases with no code to verify', 'INIT and the LOOP',
+      'forge-state.mjs" finished',
     ],
-    absent: ['git log --oneline --grep', 'git log --grep', 'First make sure no other session', 'implement -> write & run the covered-AC tests -> commit.', 'reconcile`: INIT only'],
+    absent: ['git log --oneline --grep', 'git log --grep', 'First make sure no other session', 'implement -> write & run the covered-AC tests -> commit.', 'reconcile`: INIT only',
+      'remove the worktree you just re-created'],
   },
 ];
 
@@ -172,6 +174,11 @@ for (const s of SKILLS) {
     const fi = text.indexOf("If it reports `finished: true`");
     const fin = text.slice(fi, fi + 400);
     for (const w of ['`action`', '`ref`', 'STOP']) if (fi < 0 || !fin.includes(w)) fail(s.path + ': finished stop must mention ' + w);
+    // AC-3.7: a finished run is detected BEFORE INIT (re)creates the run worktree, so a /loop
+    // tick on a finished run never churns a worktree.
+    const ini = text.slice(text.indexOf('## INIT'), text.indexOf('## LOOP'));
+    const fc = ini.indexOf('forge-state.mjs" finished'), wa = ini.indexOf('git worktree add');
+    if (fc < 0 || wa < 0 || fc > wa) fail(s.path + ': INIT must run forge-state finished before any git worktree add');
   }
   for (const m of s.absent || []) {
     if (text.includes(m)) fail(`${s.path}: superseded text must be absent: "${m}"`);

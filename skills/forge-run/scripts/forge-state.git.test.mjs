@@ -721,6 +721,45 @@ test('AC-3.2 seed reports finished before linting the plan', () => {
   assert.equal(s.finished, true);
 });
 
+// --- AC-3.7: `finished` is the read-only check INIT runs before (re)creating the run worktree ---
+
+test('AC-3.7 finished works where the plan and state are absent and writes nothing', () => {
+  seedMulti();
+  cliNow(['finish', PLAN_PATH, '--action', 'pr', '--ref', 'https://x/pull/9']);
+  // The primary dir after END removed the run worktree: no plan file, no state file.
+  rmSync(join(repo, 'docs', 'forge'), { recursive: true, force: true });
+  const r = cliJson(['finished', PLAN_PATH]);
+  assert.deepEqual(r, { plan: 'plan-007', finished: true, action: 'pr', ref: 'https://x/pull/9', at: FIXED_NOW });
+  assert.equal(existsSync(join(repo, 'docs', 'forge')), false);
+  assert.equal(existsSync(lockFile()), false);
+});
+
+test('AC-3.7 finished reports false for a run that never finished and creates no state, lock or pointer', () => {
+  write('docs/context/todo.md', '# Todo\n');
+  const r = cliJson(['finished', PLAN_PATH]);
+  assert.deepEqual(r, { plan: 'plan-007', finished: false });
+  assert.equal(existsSync(join(repo, STATE_PATH)), false);
+  assert.equal(existsSync(join(git('rev-parse', '--path-format=absolute', '--git-common-dir'), 'forge')), false);
+  assert.equal(readFileSync(join(repo, 'docs/context/todo.md'), 'utf8'), '# Todo\n');
+});
+
+test('AC-3.7 finished in the primary dir sees a finish recorded from a linked run worktree', () => {
+  const wt = join(mkdtempSync(join(tmpdir(), 'forge-wt-')), 'run');
+  try {
+    git('worktree', 'add', '-q', '-b', 'forge/007-demo', wt);
+    mkdirSync(join(wt, 'docs/forge/plans'), { recursive: true });
+    writeFileSync(join(wt, PLAN_PATH), MULTI);
+    execFileSync(process.execPath, [SCRIPT, 'finish', PLAN_PATH, '--action', 'pr', '--ref', 'https://x/pull/3'],
+      { cwd: wt, env: { ...ENV, FORGE_STATE_NOW: FIXED_NOW }, encoding: 'utf8', stdio: 'pipe' });
+    git('worktree', 'remove', '--force', wt);
+    const r = cliJson(['finished', PLAN_PATH]);
+    assert.equal(r.finished, true);
+    assert.equal(r.ref, 'https://x/pull/3');
+  } finally {
+    rmSync(dirname(wt), { recursive: true, force: true });
+  }
+});
+
 // --- AC-3.4: single-driver run lock with heartbeat ---
 
 const T0 = Date.parse('2026-10-18T12:00:00.000Z');

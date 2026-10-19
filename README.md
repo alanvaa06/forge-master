@@ -26,7 +26,7 @@ claude plugin validate .       # official marketplace manifest validation
 claude plugin validate .claude-plugin/plugin.json   # schema-checks plugin components (agents/, hooks/hooks.json)
 node validate.mjs              # this repo's structural acceptance test (runs every *.test.mjs too)
 node --test skills/forge-run/scripts/forge-state.test.mjs       # state-script unit tests alone
-node --test skills/forge-run/scripts/forge-state.git.test.mjs   # verify / set-done gate / reconcile / finish / preflight / lock (temp git repos)
+node --test skills/forge-run/scripts/forge-state.git.test.mjs   # verify / set-done gate / reconcile / finish / finished / preflight / lock (temp git repos)
 node --test hooks/forge-guard.test.mjs                          # guard hook table tests
 ```
 
@@ -96,6 +96,7 @@ The two tags are two execution patterns: light = **inline execution** by the orc
 - `forge-state seed <plan> --holder <session-id>` takes a run lock (`<git-common-dir>/forge/plan-NNN.lock.json`, shared by every worktree, never committed). Another holder with a fresh heartbeat is refused; every mutating `forge-state` command refreshes the heartbeat; a heartbeat older than 120 minutes is taken over (`lock_takeover: true`). The lock is released when every phase is terminal and by `finish`. A crashed session's lock holds until stale; delete the lock file by hand only when you know no session is driving the run.
 - `forge-state reconcile <plan>` marks `done {reconciled}` every phase whose commit subject on the run branch is `P<n>: <phase name>` — INIT uses it instead of hand-run `git log --grep` steps.
 - `forge-state finish <plan> --action pr|merge|keep --ref <url|sha|branch>` records the landing twice: a marker in `<git-common-dir>/forge/plan-NNN.finished.json` and a `[meta] plan-NNN finished:` line in the state file, committed where the action landed. From then on `seed` and `next` report `finished: true`, a second `finish` exits 1, and a re-invoked `/forge-master:run` (e.g. by `/loop`) reports the run as already finished and never pushes, merges or opens a PR again.
+- `forge-state finished <plan>` is the read-only form of that check, and INIT runs it first, before it creates or re-adds the run worktree: it needs neither the plan file nor the state file in the current dir, so a `/loop` tick on a finished run stops in the primary dir without touching any worktree or branch.
 - Re-opening a finished plan is not supported: write a new plan number. (By hand, it takes deleting both the marker file and the committed `[meta]` line.)
 
 **TDD discipline.** Heavy phases follow the Iron Law per AC (`skills/forge-run/references/tdd.md`): test first → MUST fail → minimal implementation → green; code before failing test = violation, AC cycle restarts. Light phases are test-after by declared trade-off (token economy) — escalation to heavy restores full TDD.
@@ -166,7 +167,7 @@ skills/
     parallel.md                # worktree fan-out — plan-frozen parallel groups, sequential integration
   forge-run/scripts/
     forge-state.mjs            # run-state machine: lint, seed, next, set, red, escalate, recover, status,
-                               #   verify, reconcile, finish, preflight (+ run lock)
+                               #   verify, reconcile, finish, finished, preflight (+ run lock)
     forge-git.mjs              # git helpers: code snapshots, gates runner, AC-test trace, phase commits
     forge-state.test.mjs       # its unit tests (node --test)
     forge-state.git.test.mjs   # temp-git-repo tests for the git-backed commands

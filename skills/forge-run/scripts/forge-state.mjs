@@ -17,6 +17,7 @@
 //   node forge-state.mjs reconcile <plan-file>
 //   node forge-state.mjs finish   <plan-file> --action pr|merge|keep [--ref <url-or-sha>]
 //   node forge-state.mjs preflight <plan-file>
+//   node forge-state.mjs finished <plan-file>   (read-only; the plan file need not exist)
 // Run lock: <git-common-dir>/forge/plan-NNN.lock.json; mutating commands refresh its heartbeat,
 // a lock idle >= 120 min is taken over. FORGE_STATE_NOW (ISO 8601) overrides the clock, tests only.
 // Common flags: --state <path> (alias --todo; default docs/forge/runs/<plan>.state.md),
@@ -523,7 +524,16 @@ function finishedRecord(id, stateText) {
 const args = parseArgs(process.argv.slice(2));
 const [cmd, planPath, ...cmdArgs] = args.rest;
 if (!cmd || !planPath)
-  fail('usage: forge-state.mjs <lint|seed|next|set|red|escalate|recover|status|verify|reconcile|finish|preflight> <plan-file> [args] [--state <path>]');
+  fail('usage: forge-state.mjs <lint|seed|next|set|red|escalate|recover|status|verify|reconcile|finish|preflight|finished> <plan-file> [args] [--state <path>]');
+// `finished` runs before the plan is parsed: INIT calls it from the primary dir, before
+// (re)creating the run worktree, where the plan and state may live only on the run branch.
+// Read-only: no state write, no lock, no todo.md pointer.
+if (cmd === 'finished') {
+  const id = basename(planPath).replace(/\.md$/, '');
+  const fin = finishedRecord(id, readText(args.state ?? `docs/forge/runs/${id}.state.md`));
+  print({ plan: id, finished: Boolean(fin), ...fin });
+  process.exit(0);
+}
 const plan = parsePlan(planPath);
 const { planId, phases, config, rawConfig } = plan;
 const statePath = args.state ?? `docs/forge/runs/${planId}.state.md`;
