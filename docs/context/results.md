@@ -15,3 +15,7 @@
 - P4 done (iter 1 -> green after review, junior/heavy, AC-3.1 AC-3.2 AC-3.5): reconcile, finish (marker in git common dir + [meta] line), preflight, finished in seed/next. 59 git tests.
   - review blockers fixed: reconcile counted a merged EARLIER plan's `P<n>:` commits -> now name-scoped (`P<n>: <name>` exact or `<name> ` prefix; narrower than AC-3.1/I1 wording, recorded divergence); preflight ignored default on_complete=pr.
   - nits: earlier-plan names that extend the new name (`P1: core utils` vs phase `core`) still collide; reconcile in a commit-less repo says "needs a git work tree"; no test for finished-from-meta-line-only (probe confirms it works).
+- P5 done (iter 1 -> green after review, junior/heavy, AC-3.4): run lock in git common dir, stale 120 min, takeover JSON, heartbeat on mutating commands, release at all-terminal + finish; wx exclusive create; FORGE_STATE_NOW validated. 72 git tests.
+  - review blocker fixed: lock with missing/garbage heartbeat_at gave NaN age and refused other holders forever -> counts as stale.
+  - nits: non-ISO FORGE_STATE_NOW makes a mutating command exit 1 AFTER its state write (tests-only var); same-holder re-seed over a lock lacking acquired_at drops the key; run_root records cwd not repo toplevel.
+  - spec-level (for README/P8): lock released at all-terminal leaves END/landing unlocked until finish; heartbeat does not check holder (lock enforced only at seed).

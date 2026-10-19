@@ -181,6 +181,31 @@ for (const tf of testFiles) {
   }
 }
 
+// 2e. Guard hook registration (spec-002 I6, D18): hooks/hooks.json registers a PreToolUse
+//     command hook whose matcher covers the guarded tools and whose command + args
+//     reference ${CLAUDE_PLUGIN_ROOT} (exec form or string form both accepted).
+const HJ = 'hooks/hooks.json';
+if (!existsSync(HJ)) {
+  fail(HJ + ' missing');
+} else {
+  try {
+    const h = JSON.parse(readFileSync(HJ, 'utf8'));
+    const entries = h.hooks?.PreToolUse;
+    if (!Array.isArray(entries)) throw new Error('hooks.PreToolUse is not an array');
+    const covers = (matcher, tool) =>
+      matcher === undefined || matcher === '' || matcher === '*' || new RegExp(`^(?:${matcher})$`).test(tool);
+    const guarded = ['Edit', 'Write', 'NotebookEdit', 'Bash'];
+    const good = entries.some((e) =>
+      guarded.every((t) => covers(e.matcher, t)) &&
+      (e.hooks ?? []).some((c) => c.type === 'command' &&
+        [c.command, ...(Array.isArray(c.args) ? c.args : [])].some((s) => typeof s === 'string' && s.includes('${CLAUDE_PLUGIN_ROOT}'))));
+    if (!good) fail(`${HJ}: no PreToolUse command hook whose matcher covers ${guarded.join('|')} and whose command/args reference \${CLAUDE_PLUGIN_ROOT}`);
+    else ok(`${HJ} registers the PreToolUse guard (${guarded.join('|')}, \${CLAUDE_PLUGIN_ROOT})`);
+  } catch (e) {
+    fail(`${HJ} invalid: ${e.message}`);
+  }
+}
+
 // 3. Plan template skeleton.
 const TPL = 'templates/plan-template.md';
 if (!existsSync(TPL)) {
