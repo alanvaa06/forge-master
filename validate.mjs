@@ -76,6 +76,7 @@ const SKILLS = [
     markers: ['## Architecture', 'Interfaces', 'File Map', 'docs/forge/specs/spec-', 'OPTIONAL', 'gate 1.5'],
   },
   {
+    // AC-2.7 (gates: derived from CI config + test scripts), AC-3.6 (no-remote on_complete hard block)
     path: 'skills/plan-design/SKILL.md',
     name: 'plan-design',
     markers: ['covers', 'depends_on', 'lessons.md', 'Total coverage', 'gate 2', 'spec-NNN.md', 'Parallel Groups', 'budget', 'forge-state.mjs" lint', 'P0: setup test harness',
@@ -88,6 +89,8 @@ const SKILLS = [
     markers: ['## Budget Matrix', 'phase_budget', 'run_budget', 'order-of-magnitude', 'OPTIONAL', 'gate 2', 'never a gate'],
   },
   {
+    // AC-1.7 (plugin agent dispatch), AC-2.7 (verify before set done), AC-3.3 (finished stop,
+    // reconcile replaces git log --grep), AC-3.6 (preflight on a fresh run stops on ok: false)
     path: 'skills/forge-run/SKILL.md',
     name: 'run',
     markers: [
@@ -107,7 +110,8 @@ const SKILLS = [
   },
 ];
 
-// 2b. Progressive-disclosure reference files for the run loop.
+// 2b. Progressive-disclosure reference files for the run loop
+//     (AC-1.7: dispatch/code-review/parallel name the plugin agents; orchestrator owns every commit).
 const REFS = [
   {
     path: 'skills/forge-run/references/tdd.md',
@@ -250,7 +254,7 @@ for (const tf of testFiles) {
   }
 }
 
-// 2e. Guard hook registration (spec-002 I6, D18): hooks/hooks.json registers a PreToolUse
+// 2e. Guard hook registration (spec-002 I6, D18, AC-1.6): hooks/hooks.json registers a PreToolUse
 //     command hook whose matcher covers the guarded tools and whose command + args
 //     reference ${CLAUDE_PLUGIN_ROOT} (exec form or string form both accepted).
 const HJ = 'hooks/hooks.json';
